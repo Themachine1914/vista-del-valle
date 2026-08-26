@@ -1,7 +1,7 @@
 "use client";
 
 import { registrarVentaAction } from "@/app/actions/ventas";
-import { formatRD } from "@/lib/money";
+import { formatQty, formatRD } from "@/lib/money";
 import { LiveRefresh } from "@/components/app/LiveRefresh";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -32,6 +32,76 @@ type TicketItem = {
   precioUnitario: number | null;
 };
 
+export type DishRecipeInfo = {
+  porcionesQueRinde: number;
+  ingredients: {
+    ingredientId: string;
+    nombre: string;
+    unidadMedida: "G" | "ML" | "UD";
+    cantidadPorReceta: number;
+    stockActual: number;
+    stockMinimo: number;
+  }[];
+};
+
+type IngredientImpact = {
+  ingredientId: string;
+  nombre: string;
+  unidadMedida: "G" | "ML" | "UD";
+  stockActual: number;
+  stockMinimo: number;
+  usado: number;
+  proyectado: number;
+};
+
+// Same rule as computeDeductionQty in src/lib/inventory.ts (kept as plain
+// numbers here since this only drives a client-side preview, not the write).
+function proyectarUso(cantidadPorReceta: number, porcionesQueRinde: number, unidadesVendidas: number) {
+  if (porcionesQueRinde <= 0) return 0;
+  return cantidadPorReceta * (unidadesVendidas / porcionesQueRinde);
+}
+
+function computeInventoryImpact(
+  ticket: TicketItem[],
+  recipesByDish: Record<string, DishRecipeInfo>,
+): IngredientImpact[] {
+  const usado = new Map<string, IngredientImpact>();
+
+  function apply(dishId: string, cantidad: number) {
+    const recipe = recipesByDish[dishId];
+    if (!recipe) return;
+    for (const ing of recipe.ingredients) {
+      const qty = proyectarUso(ing.cantidadPorReceta, recipe.porcionesQueRinde, cantidad);
+      const existing = usado.get(ing.ingredientId);
+      if (existing) {
+        existing.usado += qty;
+        existing.proyectado -= qty;
+      } else {
+        usado.set(ing.ingredientId, {
+          ingredientId: ing.ingredientId,
+          nombre: ing.nombre,
+          unidadMedida: ing.unidadMedida,
+          stockActual: ing.stockActual,
+          stockMinimo: ing.stockMinimo,
+          usado: qty,
+          proyectado: ing.stockActual - qty,
+        });
+      }
+    }
+  }
+
+  for (const t of ticket) {
+    apply(t.dishId, t.cantidad);
+    if (t.garnishId) apply(t.garnishId, t.cantidad);
+  }
+
+  return [...usado.values()].sort((a, b) => {
+    const severity = (x: IngredientImpact) =>
+      x.proyectado < 0 ? 0 : x.proyectado < x.stockMinimo ? 1 : 2;
+    return severity(a) - severity(b) || a.nombre.localeCompare(b.nombre);
+  });
+}
+
 export function VentasClient({
   fecha,
   turno,
@@ -39,6 +109,7 @@ export function VentasClient({
   garnishes,
   lines,
   totalDia,
+  recipesByDish,
 }: {
   fecha: string;
   turno: "DESAYUNO" | "ALMUERZO" | "CENA";
@@ -46,6 +117,7 @@ export function VentasClient({
   garnishes: DishOption[];
   lines: SaleLine[];
   totalDia: number;
+  recipesByDish: Record<string, DishRecipeInfo>;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -89,6 +161,12 @@ export function VentasClient({
     const price = t.precioUnitario ?? dish?.precio ?? 0;
     return acc + price * t.cantidad;
   }, 0);
+
+  const inventoryImpact = useMemo(
+    () => computeInventoryImpact(ticket, recipesByDish),
+    [ticket, recipesByDish],
+  );
+  const criticos = inventoryImpact.filter((i) => i.proyectado < i.stockMinimo).length;
 
   async function submit() {
     setPending(true);
@@ -265,6 +343,54 @@ export function VentasClient({
           </ul>
         )}
         <p className="mt-4 text-lg font-semibold">{formatRD(ticketTotal)}</p>
+
+        {inventoryImpact.length > 0 ? (
+          <div className="mt-4 rounded-[10px] border border-fa-border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-medium text-fa-primary">Impacto en inventario</h3>
+              {criticos > 0 ? (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                  {criticos} bajo mínimo
+                </span>
+              ) : null}
+            </div>
+            <ul className="mt-2 space-y-1.5">
+              {inventoryImpact.map((i) => {
+                const level =
+                  i.proyectado < 0 ? "red" : i.proyectado < i.stockMinimo ? "amber" : "ok";
+                return (
+                  <li key={i.ingredientId} className="flex items-center justify-between gap-2 text-xs">
+                    <span
+                      className={
+                        level === "red"
+                          ? "font-medium text-red-800"
+                          : level === "amber"
+                            ? "font-medium text-amber-800"
+                            : "text-fa-muted"
+                      }
+                    >
+                      {i.nombre}
+                    </span>
+                    <span
+                      className={
+                        level === "red"
+                          ? "text-red-800"
+                          : level === "amber"
+                            ? "text-amber-800"
+                            : "text-fa-muted"
+                      }
+                    >
+                      {formatQty(i.stockActual, i.unidadMedida)} →{" "}
+                      {formatQty(Math.max(i.proyectado, 0), i.unidadMedida)}
+                      {i.proyectado < 0 ? " (¡no alcanza!)" : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+
         {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
         <button
           type="button"

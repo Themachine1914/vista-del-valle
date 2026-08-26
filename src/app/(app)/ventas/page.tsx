@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { toMoney } from "@/lib/money";
 import { canRegisterSales, homeForRole } from "@/lib/roles";
 import { redirect } from "next/navigation";
-import { VentasClient, type DishOption, type SaleLine } from "@/components/app/VentasClient";
+import {
+  VentasClient,
+  type DishOption,
+  type DishRecipeInfo,
+  type SaleLine,
+} from "@/components/app/VentasClient";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +37,7 @@ export default async function VentasPage({
   const [y, m, d] = fecha.split("-").map(Number);
   const day = new Date(Date.UTC(y, m - 1, d));
 
-  const [dishes, sale, users] = await Promise.all([
+  const [dishes, sale, users, recipes] = await Promise.all([
     prisma.dish.findMany({
       where: { disponible: true },
       include: { category: true },
@@ -48,7 +53,25 @@ export default async function VentasPage({
       },
     }),
     prisma.user.findMany({ select: { id: true, name: true } }),
+    prisma.recipe.findMany({
+      include: { ingredients: { include: { ingredient: true } } },
+    }),
   ]);
+
+  const recipesByDish: Record<string, DishRecipeInfo> = {};
+  for (const r of recipes) {
+    recipesByDish[r.dishId] = {
+      porcionesQueRinde: r.porcionesQueRinde,
+      ingredients: r.ingredients.map((line) => ({
+        ingredientId: line.ingredientId,
+        nombre: line.ingredient.nombre,
+        unidadMedida: line.ingredient.unidadMedida,
+        cantidadPorReceta: toMoney(line.cantidad),
+        stockActual: toMoney(line.ingredient.stockActual),
+        stockMinimo: toMoney(line.ingredient.stockMinimo),
+      })),
+    };
+  }
 
   const options: DishOption[] = dishes.map((d) => ({
     id: d.id,
@@ -92,6 +115,7 @@ export default async function VentasPage({
         garnishes={garnishes}
         lines={lines}
         totalDia={totalDia}
+        recipesByDish={recipesByDish}
       />
   );
 }
