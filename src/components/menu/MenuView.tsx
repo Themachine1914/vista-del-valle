@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { formatRD } from "@/lib/money";
+import { homeForRole, ROLE_LABEL, type AppRole } from "@/lib/roles";
 
 export type MenuDish = {
   id: string;
@@ -29,9 +31,21 @@ export function MenuView({ categories }: { categories: MenuCategory[] }) {
   );
   const visible =
     active === "todos" ? categories : categories.filter((c) => c.id === active);
+  const { data: session, status } = useSession();
+  const role = session?.user.role as AppRole | undefined;
+  const staffHome = role ? homeForRole(role) : "/login";
+  const loggedIn = status === "authenticated" && Boolean(role);
 
   return (
     <div className="min-h-screen bg-paper text-ink">
+      {loggedIn ? (
+        <div className="bg-fa-primary px-4 py-2 text-center text-sm text-white">
+          Sesión activa · {session?.user.name} · {role ? ROLE_LABEL[role] : ""} ·{" "}
+          <Link href={staffHome} className="underline underline-offset-2">
+            Volver al panel
+          </Link>
+        </div>
+      ) : null}
       <header className="relative overflow-hidden bg-pine text-mist">
         <div className="mx-auto max-w-5xl px-4 pt-10 pb-8">
           <p className="text-xs tracking-[0.28em] text-lamp uppercase">
@@ -44,12 +58,21 @@ export function MenuView({ categories }: { categories: MenuCategory[] }) {
             Cocina de montaña con la vista del valle. Carta viva, platos de la
             casa y el aire frío de Casabito.
           </p>
-          <Link
-            href="/login"
-            className="mt-6 inline-block rounded-md border border-mist/30 px-4 py-2 text-sm hover:bg-white/10"
-          >
-            Acceso personal
-          </Link>
+          {loggedIn ? (
+            <Link
+              href={staffHome}
+              className="mt-6 inline-block rounded-md border border-mist/30 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              Volver al panel
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="mt-6 inline-block rounded-md border border-mist/30 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              Acceso personal
+            </Link>
+          )}
         </div>
         <div className="ridge bg-paper" />
       </header>

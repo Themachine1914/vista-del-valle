@@ -1,7 +1,15 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { homeForRole } from "@/lib/roles";
 import { LoginForm } from "@/components/app/LoginForm";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await auth();
+  if (session?.user.role) {
+    redirect(homeForRole(session.user.role));
+  }
+
   return (
     <div data-theme="app" className="flex min-h-screen items-center justify-center bg-fa-bg px-4">
       <div className="w-full max-w-md rounded-[10px] border border-fa-border bg-fa-surface p-8 shadow-[0_1px_2px_rgb(15_23_42_/_6%)]">
