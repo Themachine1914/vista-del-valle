@@ -1,7 +1,7 @@
 "use client";
 
 import { registrarVentaAction } from "@/app/actions/ventas";
-import { formatQty, formatRD } from "@/lib/money";
+import { formatRD, formatStockCompra } from "@/lib/money";
 import { LiveRefresh } from "@/components/app/LiveRefresh";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -380,8 +380,8 @@ export function VentasClient({
                             : "text-fa-muted"
                       }
                     >
-                      {formatQty(i.stockActual, i.unidadMedida)} →{" "}
-                      {formatQty(Math.max(i.proyectado, 0), i.unidadMedida)}
+                      {formatStockCompra(i.stockActual, i.unidadMedida)} →{" "}
+                      {formatStockCompra(Math.max(i.proyectado, 0), i.unidadMedida)}
                       {i.proyectado < 0 ? " (¡no alcanza!)" : ""}
                     </span>
                   </li>

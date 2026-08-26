@@ -1,6 +1,13 @@
 import { Prisma, type MovementType } from "@prisma/client";
 import { prisma } from "./prisma";
 
+export {
+  purchaseToStock,
+  tipoFromUnidad,
+  unidadFromTipo,
+  type TipoEntrada,
+} from "./inventory-units";
+
 type Tx = Prisma.TransactionClient;
 
 // Core stock-deduction rule: scale each recipe ingredient by how many
@@ -132,6 +139,7 @@ export async function adjustStock(input: {
   cantidad: number;
   nota?: string;
   userId: string;
+  fecha?: Date;
 }) {
   if (input.cantidad === 0) {
     throw new Error("La cantidad no puede ser 0");
@@ -153,7 +161,19 @@ export async function adjustStock(input: {
         cantidad: signed,
         nota: input.nota,
         userId: input.userId,
+        fecha: input.fecha ?? new Date(),
       },
     });
   });
+}
+
+export function slugIngredientId(nombre: string): string {
+  const base = nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36);
+  return `${base || "producto"}-${Date.now().toString(36)}`;
 }

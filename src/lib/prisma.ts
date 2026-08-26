@@ -6,7 +6,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /** Bump when schema.prisma changes so Next.js HMR does not reuse a stale client. */
-const PRISMA_EPOCH = "saleitem-user-v1";
+const PRISMA_EPOCH = "inventory-audit-v1";
 
 function getClient() {
   if (globalForPrisma.prisma && globalForPrisma.prismaEpoch === PRISMA_EPOCH) {

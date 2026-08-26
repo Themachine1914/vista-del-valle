@@ -61,7 +61,7 @@ export async function uploadDishPhotoAction(formData: FormData) {
 }
 
 export async function updateIngredientAction(formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const nombre = String(formData.get("nombre") ?? "").trim();
   const unidadMedidaRaw = String(formData.get("unidadMedida") ?? "");
@@ -77,19 +77,44 @@ export async function updateIngredientAction(formData: FormData) {
   }
   const unidadMedida =
     unidadMedidaRaw === "ML" || unidadMedidaRaw === "UD" ? unidadMedidaRaw : "G";
-  await prisma.ingredient.update({
-    where: { id },
-    data: { nombre, unidadMedida, stockActual, stockMinimo },
+  const before = await prisma.ingredient.findUnique({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.ingredient.update({
+      where: { id },
+      data: { nombre, unidadMedida, stockActual, stockMinimo },
+    });
+    if (before && before.nombre !== nombre) {
+      await tx.inventoryAudit.create({
+        data: {
+          accion: "RENOMBRE",
+          nombre,
+          detalle: `Antes: ${before.nombre}`,
+          userId: session.user.id,
+        },
+      });
+    }
   });
   revalidatePath("/admin");
   revalidatePath("/inventario");
 }
 
 export async function deleteIngredientAction(formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Falta el ingrediente");
-  await prisma.ingredient.delete({ where: { id } });
+  const ing = await prisma.ingredient.findUnique({ where: { id } });
+  if (!ing) throw new Error("Ingrediente no encontrado");
+  await prisma.$transaction(async (tx) => {
+    await tx.inventoryAudit.create({
+      data: {
+        accion: "BAJA",
+        nombre: ing.nombre,
+        detalle: `Stock al borrar: ${ing.stockActual.toString()} ${ing.unidadMedida}`,
+        userId: session.user.id,
+      },
+    });
+    await tx.ingredient.delete({ where: { id } });
+  });
   revalidatePath("/admin");
   revalidatePath("/inventario");
 }
@@ -185,7 +210,7 @@ export async function createDishAction(formData: FormData) {
 }
 
 export async function createIngredientAction(formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = String(formData.get("id") ?? "")
     .trim()
     .toLowerCase()
@@ -196,14 +221,24 @@ export async function createIngredientAction(formData: FormData) {
   if (!id || !nombre) throw new Error("Faltan datos");
   const unidad =
     unidadMedida === "ML" || unidadMedida === "UD" ? unidadMedida : "G";
-  await prisma.ingredient.create({
-    data: {
-      id,
-      nombre,
-      unidadMedida: unidad,
-      stockMinimo,
-      stockActual: stockMinimo,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.ingredient.create({
+      data: {
+        id,
+        nombre,
+        unidadMedida: unidad,
+        stockMinimo,
+        stockActual: stockMinimo,
+      },
+    });
+    await tx.inventoryAudit.create({
+      data: {
+        accion: "ALTA",
+        nombre,
+        detalle: `Creado desde administración · ${unidad}`,
+        userId: session.user.id,
+      },
+    });
   });
   revalidatePath("/admin");
   revalidatePath("/inventario");

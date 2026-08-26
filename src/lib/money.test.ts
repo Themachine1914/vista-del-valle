@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toMoney, formatRD, formatQty } from "./money";
+import { toMoney, formatRD, formatQty, formatStockCompra, GRAMS_PER_LB } from "./money";
 
 describe("toMoney", () => {
   it("returns 0 for null and undefined", () => {
@@ -46,5 +46,21 @@ describe("formatQty", () => {
 
   it("converts milliliters to liters at the 1000 boundary", () => {
     expect(formatQty(2000, "ML")).toBe("2 L");
+  });
+});
+
+describe("formatStockCompra", () => {
+  it("shows pound stock for gram products", () => {
+    expect(formatStockCompra(50 * GRAMS_PER_LB, "G")).toMatch(/50/);
+    expect(formatStockCompra(50 * GRAMS_PER_LB, "G")).toMatch(/lb/);
+  });
+
+  it("shows liters for milliliter products", () => {
+    expect(formatStockCompra(1500, "ML")).toBe("1.5 L");
+  });
+
+  it("shows units as-is", () => {
+    expect(formatStockCompra(24, "UD")).toMatch(/24/);
+    expect(formatStockCompra(24, "UD")).toMatch(/ud/);
   });
 });

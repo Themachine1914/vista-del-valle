@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { formatRD, toMoney } from "@/lib/money";
+import { formatRD, formatStockCompra, toMoney } from "@/lib/money";
 import { homeForRole, isAdmin } from "@/lib/roles";
 import { redirect } from "next/navigation";
 import { DashboardCharts } from "@/components/app/DashboardCharts";
@@ -167,8 +167,8 @@ export default async function DashboardPage() {
           <ul className="mt-2 grid gap-1 text-sm text-red-900 sm:grid-cols-2">
             {alertas.slice(0, 12).map((i) => (
               <li key={i.id}>
-                {i.nombre}: {toMoney(i.stockActual)} / mín. {toMoney(i.stockMinimo)}{" "}
-                {i.unidadMedida.toLowerCase()}
+                {i.nombre}: {formatStockCompra(i.stockActual, i.unidadMedida)} / mín.{" "}
+                {formatStockCompra(i.stockMinimo, i.unidadMedida)}
               </li>
             ))}
           </ul>

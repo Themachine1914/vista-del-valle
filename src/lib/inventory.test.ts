@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeDeductionQty } from "./inventory";
+import { GRAMS_PER_LB } from "./money";
+import { purchaseToStock } from "./inventory-units";
 
 describe("computeDeductionQty", () => {
   it("deducts the exact recipe quantity when units sold equals the yield", () => {
@@ -39,5 +41,45 @@ describe("computeDeductionQty", () => {
   it("returns zero deduction when zero units are sold", () => {
     const qty = computeDeductionQty(500, 4, 0);
     expect(qty.toNumber()).toBe(0);
+  });
+});
+
+describe("purchaseToStock", () => {
+  it("converts 2 sacks of 25 lb to grams", () => {
+    const r = purchaseToStock({
+      tipoEntrada: "LIBRA",
+      cantidadItems: 2,
+      contenidoPorItem: 25,
+    });
+    expect(r.unidadMedida).toBe("G");
+    expect(r.cantidadStock).toBeCloseTo(50 * GRAMS_PER_LB, 5);
+  });
+
+  it("converts liters to milliliters", () => {
+    const r = purchaseToStock({
+      tipoEntrada: "LITRO",
+      cantidadItems: 3,
+      contenidoPorItem: 1.5,
+    });
+    expect(r).toEqual({ unidadMedida: "ML", cantidadStock: 4500 });
+  });
+
+  it("keeps units as units", () => {
+    const r = purchaseToStock({
+      tipoEntrada: "UNIDAD",
+      cantidadItems: 2,
+      contenidoPorItem: 12,
+    });
+    expect(r).toEqual({ unidadMedida: "UD", cantidadStock: 24 });
+  });
+
+  it("rejects zero items", () => {
+    expect(() =>
+      purchaseToStock({
+        tipoEntrada: "LIBRA",
+        cantidadItems: 0,
+        contenidoPorItem: 25,
+      }),
+    ).toThrow("La cantidad debe ser mayor que 0");
   });
 });

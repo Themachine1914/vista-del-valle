@@ -28,3 +28,42 @@ export function formatQty(
   }
   return n >= 1000 ? `${(n / 1000).toLocaleString("es-DO")} kg` : `${n.toLocaleString("es-DO")} g`;
 }
+
+/** 1 libra = 16 oz ≈ 453.592 g (uso de cocina en RD). */
+export const GRAMS_PER_LB = 453.592;
+
+function formatPlain(n: number, maxFrac = 2): string {
+  const rounded = Math.round(n * 10 ** maxFrac) / 10 ** maxFrac;
+  return String(rounded);
+}
+
+export function formatStockCompra(
+  value: Decimal | number | string,
+  unidad: "G" | "ML" | "UD",
+): string {
+  const n = toMoney(value);
+  if (unidad === "UD") {
+    return `${formatPlain(n)} ud`;
+  }
+  if (unidad === "ML") {
+    return `${formatPlain(n / 1000)} L`;
+  }
+  return `${formatPlain(n / GRAMS_PER_LB)} lb`;
+}
+
+export function formatFechaCorta(value: Date | string): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  const tz = "America/Santo_Domingo";
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `${day} ${time}`;
+}
+
+export function todayISO(timeZone = "America/Santo_Domingo"): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+}
