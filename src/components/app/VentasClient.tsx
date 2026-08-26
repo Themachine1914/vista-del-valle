@@ -2,9 +2,11 @@
 
 import { registrarVentaAction } from "@/app/actions/ventas";
 import { PeriodFilter } from "@/components/app/PeriodFilter";
+import { PdfDownload } from "@/components/app/PdfDownload";
 import { LiveRefresh } from "@/components/app/LiveRefresh";
 import { formatRD, formatStockCompra } from "@/lib/money";
 import { periodoQuery, type PeriodoFiltro } from "@/lib/period";
+import { etiquetaDesglose } from "@/lib/ventas-desglose";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -40,41 +42,13 @@ export type VentasDesglose = {
   unidades: number;
 };
 
-const TURNO_LABEL: Record<string, string> = {
-  DESAYUNO: "Desayuno",
-  ALMUERZO: "Almuerzo",
-  CENA: "Cena",
-};
-
-function etiquetaDesglose(clave: string, modo: PeriodoFiltro["modo"]): string {
-  if (modo === "dia") return TURNO_LABEL[clave] ?? clave;
-  if (/^\d{4}-\d{2}$/.test(clave)) {
-    const [y, m] = clave.split("-");
-    const nombres = [
-      "ene",
-      "feb",
-      "mar",
-      "abr",
-      "may",
-      "jun",
-      "jul",
-      "ago",
-      "sep",
-      "oct",
-      "nov",
-      "dic",
-    ];
-    return `${nombres[Number(m) - 1]} ${y}`;
-  }
-  return clave;
-}
-
 export type DishRecipeInfo = {
   porcionesQueRinde: number;
   ingredients: {
     ingredientId: string;
     nombre: string;
     unidadMedida: "G" | "ML" | "UD";
+    unidadEtiqueta: string;
     cantidadPorReceta: number;
     stockActual: number;
     stockMinimo: number;
@@ -85,6 +59,7 @@ type IngredientImpact = {
   ingredientId: string;
   nombre: string;
   unidadMedida: "G" | "ML" | "UD";
+  unidadEtiqueta: string;
   stockActual: number;
   stockMinimo: number;
   usado: number;
@@ -118,6 +93,7 @@ function computeInventoryImpact(
           ingredientId: ing.ingredientId,
           nombre: ing.nombre,
           unidadMedida: ing.unidadMedida,
+          unidadEtiqueta: ing.unidadEtiqueta,
           stockActual: ing.stockActual,
           stockMinimo: ing.stockMinimo,
           usado: qty,
@@ -237,11 +213,16 @@ export function VentasClient({
           <h1 className="text-2xl font-semibold text-fa-primary">Ventas</h1>
           <LiveRefresh />
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <PeriodFilter
             basePath="/ventas"
             periodo={periodo}
             extra={{ turno }}
+          />
+          <PdfDownload
+            label="Imprimir ventas PDF"
+            apiPath="/api/ventas/registro"
+            periodo={periodo}
           />
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -472,8 +453,8 @@ export function VentasClient({
                             : "text-fa-muted"
                       }
                     >
-                      {formatStockCompra(i.stockActual, i.unidadMedida)} →{" "}
-                      {formatStockCompra(Math.max(i.proyectado, 0), i.unidadMedida)}
+                      {formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta)} →{" "}
+                      {formatStockCompra(Math.max(i.proyectado, 0), i.unidadMedida, i.unidadEtiqueta)}
                       {i.proyectado < 0 ? " (¡no alcanza!)" : ""}
                     </span>
                   </li>

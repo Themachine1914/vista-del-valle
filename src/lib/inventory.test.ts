@@ -61,16 +61,46 @@ describe("purchaseToStock", () => {
       cantidadItems: 3,
       contenidoPorItem: 1.5,
     });
-    expect(r).toEqual({ unidadMedida: "ML", cantidadStock: 4500 });
+    expect(r.unidadMedida).toBe("ML");
+    expect(r.cantidadStock).toBe(4500);
+    expect(r.etiqueta).toBe("L");
   });
 
-  it("keeps units as units", () => {
+  it("converts kilograms to grams", () => {
     const r = purchaseToStock({
-      tipoEntrada: "UNIDAD",
+      tipoEntrada: "KILO",
       cantidadItems: 2,
+      contenidoPorItem: 25,
+    });
+    expect(r.unidadMedida).toBe("G");
+    expect(r.cantidadStock).toBe(50000);
+    expect(r.etiqueta).toBe("kg");
+  });
+
+  it("treats a typed kg as kilos", () => {
+    const r = purchaseToStock({
+      tipoEntrada: "OTRO",
+      unidadCustom: "kg",
+      cantidadItems: 1,
+      contenidoPorItem: 2,
+    });
+    expect(r.unidadMedida).toBe("G");
+    expect(r.cantidadStock).toBe(2000);
+    expect(r.etiqueta).toBe("kg");
+  });
+
+  it("keeps a custom box unit as units", () => {
+    const r = purchaseToStock({
+      tipoEntrada: "OTRO",
+      unidadCustom: "caja",
+      cantidadItems: 3,
       contenidoPorItem: 12,
     });
-    expect(r).toEqual({ unidadMedida: "UD", cantidadStock: 24 });
+    expect(r).toMatchObject({
+      unidadMedida: "UD",
+      cantidadStock: 36,
+      etiqueta: "caja",
+    });
   });
 
   it("rejects zero items", () => {
@@ -89,6 +119,12 @@ describe("stock display conversion", () => {
     const internal = displayToStock(25, "LIBRA");
     expect(internal).toBeCloseTo(25 * GRAMS_PER_LB, 5);
     expect(stockToDisplay(internal, "G")).toBeCloseTo(25, 5);
+  });
+
+  it("round-trips kilograms through grams", () => {
+    const internal = displayToStock(2, "KILO");
+    expect(internal).toBe(2000);
+    expect(stockToDisplay(internal, "G", "kg")).toBe(2);
   });
 
   it("treats zero display as zero stock", () => {

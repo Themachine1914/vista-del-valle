@@ -59,8 +59,11 @@ describe("formatStockCompra", () => {
     expect(formatStockCompra(1500, "ML")).toBe("1.5 L");
   });
 
-  it("shows units as-is", () => {
-    expect(formatStockCompra(24, "UD")).toMatch(/24/);
-    expect(formatStockCompra(24, "UD")).toMatch(/ud/);
+  it("shows kilogram stock when labeled kg", () => {
+    expect(formatStockCompra(2500, "G", "kg")).toBe("2.5 kg");
+  });
+
+  it("shows a custom unit name", () => {
+    expect(formatStockCompra(12, "UD", "caja")).toBe("12 caja");
   });
 });

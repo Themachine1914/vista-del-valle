@@ -7,11 +7,14 @@ import {
   registrarCompraAction,
 } from "@/app/actions/inventario";
 import { PeriodFilter } from "@/components/app/PeriodFilter";
+import { PdfDownload } from "@/components/app/PdfDownload";
 import {
+  customFromIngredient,
   etiquetaTipo,
   purchaseToStock,
+  resolveEntrada,
   stockToDisplay,
-  tipoFromUnidad,
+  tipoFromIngredient,
   type TipoEntrada,
 } from "@/lib/inventory-units";
 import { formatStockCompra } from "@/lib/money";
@@ -23,6 +26,7 @@ type Row = {
   id: string;
   nombre: string;
   unidadMedida: "G" | "ML" | "UD";
+  unidadEtiqueta: string;
   stockActual: number;
   stockMinimo: number;
   bajo: boolean;
@@ -59,6 +63,58 @@ function round3(n: number) {
   return Math.round(n * 1000) / 1000;
 }
 
+const TIPOS: { id: TipoEntrada; label: string }[] = [
+  { id: "LIBRA", label: "Libra" },
+  { id: "KILO", label: "Kilo" },
+  { id: "LITRO", label: "Litro" },
+  { id: "UNIDAD", label: "Unidad" },
+  { id: "OTRO", label: "Otra (escribir)" },
+];
+
+function etiquetaVista(tipo: TipoEntrada, custom: string) {
+  try {
+    return resolveEntrada(tipo, custom).etiqueta;
+  } catch {
+    return etiquetaTipo(tipo, custom);
+  }
+}
+
+function TipoCampos({
+  tipo,
+  custom,
+  onChange,
+  className,
+}: {
+  tipo: TipoEntrada;
+  custom: string;
+  onChange: (tipo: TipoEntrada, custom: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-wrap gap-2 ${className ?? ""}`}>
+      <select
+        value={tipo}
+        onChange={(e) => onChange(e.target.value as TipoEntrada, custom)}
+        className="rounded-[10px] border border-fa-border bg-white px-2 py-2 text-sm text-fa-text"
+      >
+        {TIPOS.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+      {tipo === "OTRO" ? (
+        <input
+          value={custom}
+          onChange={(e) => onChange(tipo, e.target.value)}
+          placeholder="kg, caja, saco…"
+          className="min-w-28 flex-1 rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function InventarioClient({
   rows,
   canAdjust,
@@ -67,7 +123,6 @@ export function InventarioClient({
   defaultFecha,
   periodo,
   resumen,
-  pdfHref,
 }: {
   rows: Row[];
   canAdjust: boolean;
@@ -76,7 +131,6 @@ export function InventarioClient({
   defaultFecha: string;
   periodo: PeriodoFiltro;
   resumen: { altas: number; bajas: number; cambios: number; compras: number };
-  pdfHref: string;
 }) {
   const router = useRouter();
   const [soloAlertas, setSoloAlertas] = useState(false);
@@ -86,6 +140,7 @@ export function InventarioClient({
   const [nombreNuevo, setNombreNuevo] = useState("");
   const [fecha, setFecha] = useState(defaultFecha);
   const [tipoEntrada, setTipoEntrada] = useState<TipoEntrada>("LIBRA");
+  const [unidadCustom, setUnidadCustom] = useState("");
   const [cantidadItems, setCantidadItems] = useState(1);
   const [contenidoPorItem, setContenidoPorItem] = useState(1);
   const [stockMinimo, setStockMinimo] = useState(0);
@@ -98,6 +153,7 @@ export function InventarioClient({
   const [ajusteNota, setAjusteNota] = useState("");
   const [nombres, setNombres] = useState<Record<string, string>>({});
   const [tiposFila, setTiposFila] = useState<Record<string, TipoEntrada>>({});
+  const [customFila, setCustomFila] = useState<Record<string, string>>({});
   const [minimos, setMinimos] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -112,25 +168,27 @@ export function InventarioClient({
     if (modo !== "existente") return;
     const row = rows.find((r) => r.id === sel);
     if (!row) return;
-    setTipoEntrada(tipoFromUnidad(row.unidadMedida));
-    setStockMinimo(round3(stockToDisplay(row.stockMinimo, row.unidadMedida)));
+    setTipoEntrada(tipoFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+    setUnidadCustom(customFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+    setStockMinimo(round3(stockToDisplay(row.stockMinimo, row.unidadMedida, row.unidadEtiqueta)));
   }, [modo, sel, rows]);
 
-  const unidadEtiqueta = etiquetaTipo(tipoEntrada);
+  const unidadEtiqueta = etiquetaVista(tipoEntrada, unidadCustom);
 
   const preview = useMemo(() => {
     if (cantidadItems <= 0 || contenidoPorItem <= 0) return null;
     try {
       const conv = purchaseToStock({
         tipoEntrada,
+        unidadCustom,
         cantidadItems,
         contenidoPorItem,
       });
-      return formatStockCompra(conv.cantidadStock, conv.unidadMedida);
+      return formatStockCompra(conv.cantidadStock, conv.unidadMedida, conv.etiqueta);
     } catch {
       return null;
     }
-  }, [tipoEntrada, cantidadItems, contenidoPorItem]);
+  }, [tipoEntrada, unidadCustom, cantidadItems, contenidoPorItem]);
 
   const visible = rows.filter((r) => {
     if (soloAlertas && !r.bajo) return false;
@@ -146,6 +204,7 @@ export function InventarioClient({
       ingredientId: modo === "existente" ? sel : undefined,
       nombreNuevo: modo === "nuevo" ? nombreNuevo : undefined,
       tipoEntrada,
+      unidadCustom,
       cantidadItems,
       contenidoPorItem,
       stockMinimo,
@@ -191,14 +250,22 @@ export function InventarioClient({
   async function guardar(id: string) {
     const row = rows.find((r) => r.id === id);
     const nombre = (nombres[id] ?? row?.nombre ?? "").trim();
-    const tipo = tiposFila[id] ?? (row ? tipoFromUnidad(row.unidadMedida) : "LIBRA");
+    const tipo =
+      tiposFila[id] ??
+      (row ? tipoFromIngredient(row.unidadMedida, row.unidadEtiqueta) : "LIBRA");
+    const custom =
+      customFila[id] ??
+      (row ? customFromIngredient(row.unidadMedida, row.unidadEtiqueta) : "");
     const minimo =
       minimos[id] ??
-      (row ? round3(stockToDisplay(row.stockMinimo, row.unidadMedida)) : 0);
+      (row
+        ? round3(stockToDisplay(row.stockMinimo, row.unidadMedida, row.unidadEtiqueta))
+        : 0);
     const res = await guardarProductoAction({
       id,
       nombre,
       tipoEntrada: tipo,
+      unidadCustom: custom,
       stockMinimo: minimo,
     });
     if (!res.ok) {
@@ -244,12 +311,11 @@ export function InventarioClient({
             />
             Solo alertas
           </label>
-          <a
-            href={pdfHref}
-            className="rounded-[10px] bg-fa-primary px-3 py-2 text-sm font-medium text-white"
-          >
-            Descargar registro PDF
-          </a>
+          <PdfDownload
+            label="Imprimir registro PDF"
+            apiPath="/api/inventario/registro"
+            periodo={periodo}
+          />
         </div>
       </div>
 
@@ -321,17 +387,16 @@ export function InventarioClient({
                 className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
               />
             </label>
-            <label className="text-sm">
+            <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-fa-muted">Entrada por</span>
-              <select
-                value={tipoEntrada}
-                onChange={(e) => setTipoEntrada(e.target.value as TipoEntrada)}
-                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
-              >
-                <option value="LIBRA">Libra</option>
-                <option value="LITRO">Volumen (litro)</option>
-                <option value="UNIDAD">Unidad</option>
-              </select>
+              <TipoCampos
+                tipo={tipoEntrada}
+                custom={unidadCustom}
+                onChange={(tipo, custom) => {
+                  setTipoEntrada(tipo);
+                  setUnidadCustom(custom);
+                }}
+              />
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-fa-muted">
@@ -373,9 +438,13 @@ export function InventarioClient({
                 placeholder={
                   tipoEntrada === "LIBRA"
                     ? "Ej. 25 si cada saco pesa 25 lb"
-                    : tipoEntrada === "LITRO"
-                      ? "Ej. 1.5 si cada botella es 1.5 L"
-                      : "Ej. 1 o 12 si es un paquete"
+                    : tipoEntrada === "KILO"
+                      ? "Ej. 25 si cada saco pesa 25 kg"
+                      : tipoEntrada === "LITRO"
+                        ? "Ej. 1.5 si cada botella es 1.5 L"
+                        : tipoEntrada === "OTRO"
+                          ? "Ej. 1 o el contenido de cada ítem"
+                          : "Ej. 1 o 12 si es un paquete"
                 }
               />
             </label>
@@ -438,7 +507,10 @@ export function InventarioClient({
               className="rounded-[10px] border border-fa-border px-2 py-2 text-sm"
               placeholder={
                 ajusteRow
-                  ? etiquetaTipo(tipoFromUnidad(ajusteRow.unidadMedida))
+                  ? etiquetaVista(
+                      tipoFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
+                      customFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
+                    )
                   : "Cantidad"
               }
             />
@@ -458,7 +530,10 @@ export function InventarioClient({
             <p className="text-xs text-fa-muted sm:col-span-5">
               La cantidad va en{" "}
               {ajusteRow
-                ? etiquetaTipo(tipoFromUnidad(ajusteRow.unidadMedida))
+                ? etiquetaVista(
+                    tipoFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
+                    customFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
+                  )
                 : "la unidad del producto"}
               {ajusteTipo === "AJUSTE" ? " (negativo para restar)." : "."}
             </p>
@@ -503,22 +578,25 @@ export function InventarioClient({
                 <td className="px-3 py-2">{r.etiqueta}</td>
                 <td className="px-3 py-2">
                   {canAdjust ? (
-                    <select
-                      value={tiposFila[r.id] ?? tipoFromUnidad(r.unidadMedida)}
-                      onChange={(e) =>
-                        setTiposFila((prev) => ({
-                          ...prev,
-                          [r.id]: e.target.value as TipoEntrada,
-                        }))
+                    <TipoCampos
+                      tipo={
+                        tiposFila[r.id] ??
+                        tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta)
                       }
-                      className="rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
-                    >
-                      <option value="LIBRA">Libra</option>
-                      <option value="LITRO">Litro</option>
-                      <option value="UNIDAD">Unidad</option>
-                    </select>
+                      custom={
+                        customFila[r.id] ??
+                        customFromIngredient(r.unidadMedida, r.unidadEtiqueta)
+                      }
+                      onChange={(tipo, custom) => {
+                        setTiposFila((prev) => ({ ...prev, [r.id]: tipo }));
+                        setCustomFila((prev) => ({ ...prev, [r.id]: custom }));
+                      }}
+                    />
                   ) : (
-                    etiquetaTipo(tipoFromUnidad(r.unidadMedida))
+                    etiquetaVista(
+                      tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                      customFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                    )
                   )}
                 </td>
                 <td className="px-3 py-2">
@@ -530,7 +608,9 @@ export function InventarioClient({
                         step="0.001"
                         value={
                           minimos[r.id] ??
-                          round3(stockToDisplay(r.stockMinimo, r.unidadMedida))
+                          round3(
+                            stockToDisplay(r.stockMinimo, r.unidadMedida, r.unidadEtiqueta),
+                          )
                         }
                         onChange={(e) =>
                           setMinimos((prev) => ({
@@ -541,7 +621,12 @@ export function InventarioClient({
                         className="w-24 rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
                       />
                       <span className="text-xs text-fa-muted">
-                        {etiquetaTipo(tiposFila[r.id] ?? tipoFromUnidad(r.unidadMedida))}
+                        {etiquetaVista(
+                          tiposFila[r.id] ??
+                            tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                          customFila[r.id] ??
+                            customFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                        )}
                       </span>
                     </label>
                   ) : (

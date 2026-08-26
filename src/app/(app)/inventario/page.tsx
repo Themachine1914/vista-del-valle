@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
-import { parsePeriodo, periodoQuery, type PeriodoFiltro } from "@/lib/period";
+import { parsePeriodo, type PeriodoFiltro } from "@/lib/period";
 import { InventarioClient } from "@/components/app/InventarioClient";
 import { redirect } from "next/navigation";
 
@@ -37,7 +37,7 @@ export default async function InventarioPage({
       where: { tipo: "ENTRADA", fecha: range },
       orderBy: { fecha: "desc" },
       include: {
-        ingredient: { select: { nombre: true, unidadMedida: true } },
+        ingredient: { select: { nombre: true, unidadMedida: true, unidadEtiqueta: true } },
         user: { select: { name: true } },
       },
     }),
@@ -46,11 +46,12 @@ export default async function InventarioPage({
     id: i.id,
     nombre: i.nombre,
     unidadMedida: i.unidadMedida,
+    unidadEtiqueta: i.unidadEtiqueta,
     stockActual: toMoney(i.stockActual),
     stockMinimo: toMoney(i.stockMinimo),
     bajo: toMoney(i.stockActual) < toMoney(i.stockMinimo),
-    etiqueta: formatStockCompra(i.stockActual, i.unidadMedida),
-    minimoEtiqueta: formatStockCompra(i.stockMinimo, i.unidadMedida),
+    etiqueta: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
+    minimoEtiqueta: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
   }));
   const filtro: PeriodoFiltro = {
     modo: periodo.modo,
@@ -73,7 +74,6 @@ export default async function InventarioPage({
       canAdjust={canAdjust}
       periodo={filtro}
       resumen={resumen}
-      pdfHref={`/api/inventario/registro?${periodoQuery(filtro)}`}
       audits={audits.map((a) => ({
         id: a.id,
         accion: a.accion,
@@ -86,7 +86,7 @@ export default async function InventarioPage({
         id: m.id,
         producto: m.ingredient.nombre,
         nota: m.nota,
-        etiqueta: formatStockCompra(m.cantidad, m.ingredient.unidadMedida),
+        etiqueta: formatStockCompra(m.cantidad, m.ingredient.unidadMedida, m.ingredient.unidadEtiqueta),
         usuario: m.user?.name ?? "Sistema",
         fecha: formatFechaCorta(m.fecha),
       }))}

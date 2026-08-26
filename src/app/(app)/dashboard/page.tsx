@@ -167,8 +167,8 @@ export default async function DashboardPage() {
           <ul className="mt-2 grid gap-1 text-sm text-red-900 sm:grid-cols-2">
             {alertas.slice(0, 12).map((i) => (
               <li key={i.id}>
-                {i.nombre}: {formatStockCompra(i.stockActual, i.unidadMedida)} / mín.{" "}
-                {formatStockCompra(i.stockMinimo, i.unidadMedida)}
+                {i.nombre}: {formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta)} / mín.{" "}
+                {formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta)}
               </li>
             ))}
           </ul>

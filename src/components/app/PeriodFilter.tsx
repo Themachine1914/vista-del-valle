@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { yearsAround, type PeriodoFiltro, type PeriodoModo, periodoQuery } from "@/lib/period";
+import {
+  parsePeriodo,
+  yearsAround,
+  type PeriodoFiltro,
+  type PeriodoModo,
+  periodoQuery,
+} from "@/lib/period";
 
 const MODOS: { id: PeriodoModo; label: string }[] = [
   { id: "dia", label: "Día" },
@@ -10,20 +16,51 @@ const MODOS: { id: PeriodoModo; label: string }[] = [
   { id: "rango", label: "Rango" },
 ];
 
+function toFiltro(
+  current: PeriodoFiltro,
+  next: Partial<PeriodoFiltro> & { modo?: PeriodoModo },
+): PeriodoFiltro {
+  const parsed = parsePeriodo({
+    periodo: next.modo ?? current.modo,
+    fecha: next.fecha ?? current.fecha,
+    mes: next.mes ?? current.mes,
+    anio: next.anio ?? current.anio,
+    desde: next.desde ?? current.desde,
+    hasta: next.hasta ?? current.hasta,
+  });
+  return {
+    modo: parsed.modo,
+    fecha: parsed.fecha,
+    mes: parsed.mes,
+    anio: parsed.anio,
+    desde: parsed.desde,
+    hasta: parsed.hasta,
+    label: parsed.label,
+  };
+}
+
 export function PeriodFilter({
   basePath,
   periodo,
   extra,
+  onChange,
 }: {
-  basePath: string;
+  basePath?: string;
   periodo: PeriodoFiltro;
   extra?: Record<string, string | undefined>;
+  onChange?: (next: PeriodoFiltro) => void;
 }) {
   const router = useRouter();
 
   function go(next: Partial<PeriodoFiltro> & { modo?: PeriodoModo }) {
-    const merged: PeriodoFiltro = { ...periodo, ...next, modo: next.modo ?? periodo.modo };
-    router.push(`${basePath}?${periodoQuery(merged, extra)}`);
+    const merged = toFiltro(periodo, next);
+    if (onChange) {
+      onChange(merged);
+      return;
+    }
+    if (basePath) {
+      router.push(`${basePath}?${periodoQuery(merged, extra)}`);
+    }
   }
 
   return (

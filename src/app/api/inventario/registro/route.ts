@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       where: { tipo: "ENTRADA", fecha: range },
       orderBy: { fecha: "desc" },
       include: {
-        ingredient: { select: { nombre: true, unidadMedida: true } },
+        ingredient: { select: { nombre: true, unidadMedida: true, unidadEtiqueta: true } },
         user: { select: { name: true } },
       },
     }),
@@ -50,14 +50,14 @@ export async function GET(request: Request) {
     compras: compras.map((m) => ({
       fecha: formatFechaCorta(m.fecha),
       producto: m.ingredient.nombre,
-      etiqueta: formatStockCompra(m.cantidad, m.ingredient.unidadMedida),
+      etiqueta: formatStockCompra(m.cantidad, m.ingredient.unidadMedida, m.ingredient.unidadEtiqueta),
       nota: m.nota ?? "",
       usuario: m.user?.name ?? "Sistema",
     })),
     stock: stock.map((i) => ({
       nombre: i.nombre,
-      stock: formatStockCompra(i.stockActual, i.unidadMedida),
-      minimo: formatStockCompra(i.stockMinimo, i.unidadMedida),
+      stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
+      minimo: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
     })),
   });
 

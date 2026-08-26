@@ -77,6 +77,7 @@ export default async function VentasPage({
         ingredientId: line.ingredientId,
         nombre: line.ingredient.nombre,
         unidadMedida: line.ingredient.unidadMedida,
+        unidadEtiqueta: line.ingredient.unidadEtiqueta,
         cantidadPorReceta: toMoney(line.cantidad),
         stockActual: toMoney(line.ingredient.stockActual),
         stockMinimo: toMoney(line.ingredient.stockMinimo),

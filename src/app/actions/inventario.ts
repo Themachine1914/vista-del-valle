@@ -4,12 +4,14 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { adjustStock, slugIngredientId } from "@/lib/inventory";
 import {
+  customFromIngredient,
   displayToStock,
   etiquetaTipo,
   purchaseToStock,
+  resolveEntrada,
   stockToDisplay,
+  tipoFromIngredient,
   tipoFromUnidad,
-  unidadFromTipo,
   type TipoEntrada,
 } from "@/lib/inventory-units";
 import { Prisma } from "@prisma/client";
@@ -24,18 +26,20 @@ async function convertRecipeQuantities(
   tx: Prisma.TransactionClient,
   ingredientId: string,
   fromUnidad: "G" | "ML" | "UD",
+  fromEtiqueta: string,
   tipoNuevo: TipoEntrada,
+  customNuevo: string,
 ) {
-  const toUnidad = unidadFromTipo(tipoNuevo);
-  if (fromUnidad === toUnidad) return;
+  const to = resolveEntrada(tipoNuevo, customNuevo);
+  if (fromUnidad === to.unidadMedida) return;
   const lines = await tx.recipeIngredient.findMany({ where: { ingredientId } });
   for (const line of lines) {
-    const display = stockToDisplay(Number(line.cantidad), fromUnidad);
+    const display = stockToDisplay(Number(line.cantidad), fromUnidad, fromEtiqueta);
     await tx.recipeIngredient.update({
       where: {
         recipeId_ingredientId: { recipeId: line.recipeId, ingredientId },
       },
-      data: { cantidad: displayToStock(display, tipoNuevo) },
+      data: { cantidad: displayToStock(display, tipoNuevo, customNuevo) },
     });
   }
 }
@@ -81,7 +85,8 @@ export async function ajustarInventarioAction(raw: unknown) {
       return { ok: false as const, error: "Producto no encontrado" };
     }
     const conv = purchaseToStock({
-      tipoEntrada: tipoFromUnidad(ingredient.unidadMedida),
+      tipoEntrada: tipoFromIngredient(ingredient.unidadMedida, ingredient.unidadEtiqueta),
+      unidadCustom: customFromIngredient(ingredient.unidadMedida, ingredient.unidadEtiqueta),
       cantidadItems: 1,
       contenidoPorItem: Math.abs(parsed.data.cantidad),
     });
@@ -107,7 +112,8 @@ export async function ajustarInventarioAction(raw: unknown) {
 const compraSchema = z.object({
   ingredientId: z.string().optional(),
   nombreNuevo: z.string().max(80).optional(),
-  tipoEntrada: z.enum(["LIBRA", "LITRO", "UNIDAD"]),
+  tipoEntrada: z.enum(["LIBRA", "KILO", "LITRO", "UNIDAD", "OTRO"]),
+  unidadCustom: z.string().max(24).optional(),
   cantidadItems: z.coerce.number().positive(),
   contenidoPorItem: z.coerce.number().positive(),
   stockMinimo: z.coerce.number().min(0),
@@ -133,11 +139,17 @@ export async function registrarCompraAction(raw: unknown) {
   try {
     const conv = purchaseToStock({
       tipoEntrada: data.tipoEntrada as TipoEntrada,
+      unidadCustom: data.unidadCustom,
       cantidadItems: data.cantidadItems,
       contenidoPorItem: data.contenidoPorItem,
     });
     const fecha = parseDay(data.fecha);
-    const etiquetaUnidad = etiquetaTipo(data.tipoEntrada as TipoEntrada);
+    const etiquetaUnidad = conv.etiqueta;
+    const minimoInterno = displayToStock(
+      data.stockMinimo,
+      data.tipoEntrada,
+      data.unidadCustom,
+    );
     const notaCompra =
       data.nota?.trim() ||
       `Compra ${data.fecha}: ${data.cantidadItems} × ${data.contenidoPorItem} ${etiquetaUnidad}`;
@@ -160,8 +172,9 @@ export async function registrarCompraAction(raw: unknown) {
             id: slugIngredientId(nombreNuevo),
             nombre: nombreNuevo,
             unidadMedida: conv.unidadMedida,
+            unidadEtiqueta: etiquetaUnidad,
             stockActual: 0,
-            stockMinimo: displayToStock(data.stockMinimo, data.tipoEntrada),
+            stockMinimo: minimoInterno,
           },
         });
         created = true;
@@ -175,22 +188,32 @@ export async function registrarCompraAction(raw: unknown) {
         });
       } else {
         const unidadAnterior = ingredient.unidadMedida;
+        const etiquetaAnterior = ingredient.unidadEtiqueta;
+        const etiquetaVieja =
+          etiquetaAnterior || etiquetaTipo(tipoFromUnidad(unidadAnterior));
         if (unidadAnterior !== conv.unidadMedida) {
           const stockConvertido = displayToStock(
-            stockToDisplay(Number(ingredient.stockActual), unidadAnterior),
+            stockToDisplay(
+              Number(ingredient.stockActual),
+              unidadAnterior,
+              etiquetaAnterior,
+            ),
             data.tipoEntrada,
+            data.unidadCustom,
           );
           await convertRecipeQuantities(
             tx,
             ingredient.id,
             unidadAnterior,
+            etiquetaAnterior,
             data.tipoEntrada,
+            data.unidadCustom ?? "",
           );
           await tx.inventoryAudit.create({
             data: {
               accion: "RENOMBRE",
               nombre: ingredient.nombre,
-              detalle: `Volumen: ${etiquetaTipo(tipoFromUnidad(unidadAnterior))} → ${etiquetaUnidad}`,
+              detalle: `Volumen: ${etiquetaVieja} → ${etiquetaUnidad}`,
               userId: session.user.id,
             },
           });
@@ -198,15 +221,27 @@ export async function registrarCompraAction(raw: unknown) {
             where: { id: ingredient.id },
             data: {
               unidadMedida: conv.unidadMedida,
+              unidadEtiqueta: etiquetaUnidad,
               stockActual: stockConvertido,
-              stockMinimo: displayToStock(data.stockMinimo, data.tipoEntrada),
+              stockMinimo: minimoInterno,
             },
           });
         } else {
+          if (etiquetaAnterior !== etiquetaUnidad) {
+            await tx.inventoryAudit.create({
+              data: {
+                accion: "RENOMBRE",
+                nombre: ingredient.nombre,
+                detalle: `Volumen: ${etiquetaVieja} → ${etiquetaUnidad}`,
+                userId: session.user.id,
+              },
+            });
+          }
           await tx.ingredient.update({
             where: { id: ingredient.id },
             data: {
-              stockMinimo: displayToStock(data.stockMinimo, data.tipoEntrada),
+              unidadEtiqueta: etiquetaUnidad,
+              stockMinimo: minimoInterno,
             },
           });
         }
@@ -244,7 +279,8 @@ export async function registrarCompraAction(raw: unknown) {
 const renameSchema = z.object({
   id: z.string().min(1),
   nombre: z.string().min(1).max(80),
-  tipoEntrada: z.enum(["LIBRA", "LITRO", "UNIDAD"]),
+  tipoEntrada: z.enum(["LIBRA", "KILO", "LITRO", "UNIDAD", "OTRO"]),
+  unidadCustom: z.string().max(24).optional(),
   stockMinimo: z.coerce.number().min(0),
 });
 
@@ -259,46 +295,60 @@ export async function guardarProductoAction(raw: unknown) {
   }
   const nombre = parsed.data.nombre.trim();
   const tipoNuevo = parsed.data.tipoEntrada as TipoEntrada;
-  const unidadNueva = unidadFromTipo(tipoNuevo);
   try {
+    const resuelta = resolveEntrada(tipoNuevo, parsed.data.unidadCustom);
     const before = await prisma.ingredient.findUnique({
       where: { id: parsed.data.id },
     });
     if (!before) return { ok: false as const, error: "Producto no encontrado" };
-    const minimoInterno = displayToStock(parsed.data.stockMinimo, tipoNuevo);
-    const unidadCambia = before.unidadMedida !== unidadNueva;
+    const minimoInterno = displayToStock(
+      parsed.data.stockMinimo,
+      tipoNuevo,
+      parsed.data.unidadCustom,
+    );
+    const unidadCambia = before.unidadMedida !== resuelta.unidadMedida;
+    const etiquetaCambia = before.unidadEtiqueta !== resuelta.etiqueta;
     const nombreCambia = before.nombre !== nombre;
     const minimoCambia = Number(before.stockMinimo) !== minimoInterno;
-    if (!unidadCambia && !nombreCambia && !minimoCambia) {
+    if (!unidadCambia && !etiquetaCambia && !nombreCambia && !minimoCambia) {
       return { ok: true as const };
     }
     await prisma.$transaction(async (tx) => {
       let stockActual = Number(before.stockActual);
       if (unidadCambia) {
         stockActual = displayToStock(
-          stockToDisplay(stockActual, before.unidadMedida),
+          stockToDisplay(stockActual, before.unidadMedida, before.unidadEtiqueta),
           tipoNuevo,
+          parsed.data.unidadCustom,
         );
-        await convertRecipeQuantities(tx, before.id, before.unidadMedida, tipoNuevo);
+        await convertRecipeQuantities(
+          tx,
+          before.id,
+          before.unidadMedida,
+          before.unidadEtiqueta,
+          tipoNuevo,
+          parsed.data.unidadCustom ?? "",
+        );
       }
       await tx.ingredient.update({
         where: { id: parsed.data.id },
         data: {
           nombre,
-          unidadMedida: unidadNueva,
+          unidadMedida: resuelta.unidadMedida,
+          unidadEtiqueta: resuelta.etiqueta,
           stockMinimo: minimoInterno,
           stockActual,
         },
       });
       const detalles: string[] = [];
       if (nombreCambia) detalles.push(`Antes: ${before.nombre}`);
-      if (unidadCambia) {
-        detalles.push(
-          `Volumen: ${etiquetaTipo(tipoFromUnidad(before.unidadMedida))} → ${etiquetaTipo(tipoNuevo)}`,
-        );
+      if (unidadCambia || etiquetaCambia) {
+        const etiquetaVieja =
+          before.unidadEtiqueta || etiquetaTipo(tipoFromUnidad(before.unidadMedida));
+        detalles.push(`Volumen: ${etiquetaVieja} → ${resuelta.etiqueta}`);
       }
       if (minimoCambia) {
-        detalles.push(`Mínimo: ${parsed.data.stockMinimo} ${etiquetaTipo(tipoNuevo)}`);
+        detalles.push(`Mínimo: ${parsed.data.stockMinimo} ${resuelta.etiqueta}`);
       }
       await tx.inventoryAudit.create({
         data: {
