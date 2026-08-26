@@ -3,6 +3,21 @@ import { prisma } from "./prisma";
 
 type Tx = Prisma.TransactionClient;
 
+// Core stock-deduction rule: scale each recipe ingredient by how many
+// serving-units (unidadesVendidas) were sold relative to how many servings
+// the recipe yields (porcionesQueRinde).
+export function computeDeductionQty(
+  recipeQty: Prisma.Decimal.Value,
+  porcionesQueRinde: number,
+  unidadesVendidas: number,
+): Prisma.Decimal {
+  if (porcionesQueRinde <= 0) {
+    throw new Error("porcionesQueRinde debe ser mayor que 0");
+  }
+  const factor = unidadesVendidas / porcionesQueRinde;
+  return new Prisma.Decimal(recipeQty).mul(factor);
+}
+
 async function deductRecipe(
   tx: Tx,
   dishId: string,
@@ -16,10 +31,12 @@ async function deductRecipe(
   });
   if (!recipe) return;
 
-  const factor = units / recipe.porcionesQueRinde;
-
   for (const line of recipe.ingredients) {
-    const qty = new Prisma.Decimal(line.cantidad).mul(factor);
+    const qty = computeDeductionQty(
+      line.cantidad,
+      recipe.porcionesQueRinde,
+      units,
+    );
     await tx.ingredient.update({
       where: { id: line.ingredientId },
       data: { stockActual: { decrement: qty } },
