@@ -14,6 +14,8 @@ export type RegistroPdfCompra = {
   fecha: string;
   producto: string;
   etiqueta: string;
+  precio: string;
+  unitario: string;
   nota: string;
   usuario: string;
 };
@@ -103,16 +105,16 @@ export function buildInventarioRegistroPdf(input: {
 
   autoTable(doc, {
     startY: tableStartY(doc),
-    head: [["Fecha", "Producto", "Cantidad", "Nota", "Usuario"]],
+    head: [["Fecha", "Producto", "Cantidad", "Precio", "RD$/ud"]],
     body:
       input.compras.length === 0
         ? [["—", "Sin compras", "—", "—", "—"]]
         : input.compras.map((c) => [
             c.fecha,
-            c.producto,
+            c.nota ? `${c.producto}\n${c.nota}` : c.producto,
             c.etiqueta,
-            c.nota,
-            c.usuario,
+            c.precio,
+            c.unitario,
           ]),
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.6, textColor: [15, 23, 42] },
@@ -122,8 +124,8 @@ export function buildInventarioRegistroPdf(input: {
       0: { cellWidth: 32 },
       1: { cellWidth: 48 },
       2: { cellWidth: 28 },
-      3: { cellWidth: 44 },
-      4: { cellWidth: 28 },
+      3: { cellWidth: 32 },
+      4: { cellWidth: 40 },
     },
   });
 

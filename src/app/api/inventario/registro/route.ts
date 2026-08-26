@@ -4,7 +4,8 @@ import {
   buildInventarioRegistroPdf,
   registroPdfFilename,
 } from "@/lib/inventory-registro-pdf";
-import { formatFechaCorta, formatStockCompra } from "@/lib/money";
+import { etiquetaPrecioCompra } from "@/lib/inventory-precio";
+import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
 import { parsePeriodo } from "@/lib/period";
 import { NextResponse } from "next/server";
 
@@ -47,13 +48,27 @@ export async function GET(request: Request) {
       detalle: a.detalle ?? "",
       usuario: a.user?.name ?? "Sistema",
     })),
-    compras: compras.map((m) => ({
-      fecha: formatFechaCorta(m.fecha),
-      producto: m.ingredient.nombre,
-      etiqueta: formatStockCompra(m.cantidad, m.ingredient.unidadMedida, m.ingredient.unidadEtiqueta),
-      nota: m.nota ?? "",
-      usuario: m.user?.name ?? "Sistema",
-    })),
+    compras: compras.map((m) => {
+      const precio = etiquetaPrecioCompra(
+        m.precioTotal == null ? null : toMoney(m.precioTotal),
+        toMoney(m.cantidad),
+        m.ingredient.unidadMedida,
+        m.ingredient.unidadEtiqueta,
+      );
+      return {
+        fecha: formatFechaCorta(m.fecha),
+        producto: m.ingredient.nombre,
+        etiqueta: formatStockCompra(
+          m.cantidad,
+          m.ingredient.unidadMedida,
+          m.ingredient.unidadEtiqueta,
+        ),
+        precio: precio.total,
+        unitario: precio.unitario,
+        nota: m.nota ?? "",
+        usuario: m.user?.name ?? "Sistema",
+      };
+    }),
     stock: stock.map((i) => ({
       nombre: i.nombre,
       stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),

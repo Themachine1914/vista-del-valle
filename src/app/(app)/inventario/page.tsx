@@ -4,6 +4,12 @@ import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
 import { parsePeriodo, type PeriodoFiltro } from "@/lib/period";
 import { InventarioClient } from "@/components/app/InventarioClient";
 import { redirect } from "next/navigation";
+import {
+  comparacionVsAnterior,
+  etiquetaPrecioCompra,
+  ultimasComprasPorProducto,
+  type MovimientoPrecio,
+} from "@/lib/inventory-precio";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +32,7 @@ export default async function InventarioPage({
   const periodo = parsePeriodo({ ...sp, periodo: sp.periodo ?? "mes" });
   const range = { gte: periodo.gte, lt: periodo.lt };
 
-  const [ingredients, audits, compras] = await Promise.all([
+  const [ingredients, audits, compras, entradas] = await Promise.all([
     prisma.ingredient.findMany({ orderBy: { nombre: "asc" } }),
     prisma.inventoryAudit.findMany({
       where: { createdAt: range },
@@ -41,7 +47,25 @@ export default async function InventarioPage({
         user: { select: { name: true } },
       },
     }),
+    prisma.inventoryMovement.findMany({
+      where: { tipo: "ENTRADA" },
+      orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
+      include: {
+        ingredient: { select: { unidadMedida: true, unidadEtiqueta: true } },
+      },
+    }),
   ]);
+  const historial: MovimientoPrecio[] = entradas.map((m) => ({
+    id: m.id,
+    ingredientId: m.ingredientId,
+    cantidad: toMoney(m.cantidad),
+    precioTotal: m.precioTotal == null ? null : toMoney(m.precioTotal),
+    fecha: m.fecha,
+    createdAt: m.createdAt,
+    unidadMedida: m.ingredient.unidadMedida,
+    unidadEtiqueta: m.ingredient.unidadEtiqueta,
+  }));
+  const ultimas = ultimasComprasPorProducto(historial);
   const rows = ingredients.map((i) => ({
     id: i.id,
     nombre: i.nombre,
@@ -82,14 +106,45 @@ export default async function InventarioPage({
         usuario: a.user?.name ?? "Sistema",
         createdAt: formatFechaCorta(a.createdAt),
       }))}
-      compras={compras.map((m) => ({
-        id: m.id,
-        producto: m.ingredient.nombre,
-        nota: m.nota,
-        etiqueta: formatStockCompra(m.cantidad, m.ingredient.unidadMedida, m.ingredient.unidadEtiqueta),
-        usuario: m.user?.name ?? "Sistema",
-        fecha: formatFechaCorta(m.fecha),
-      }))}
+      compras={compras.map((m) => {
+        const precio = etiquetaPrecioCompra(
+          m.precioTotal == null ? null : toMoney(m.precioTotal),
+          toMoney(m.cantidad),
+          m.ingredient.unidadMedida,
+          m.ingredient.unidadEtiqueta,
+        );
+        const vs = comparacionVsAnterior(
+          {
+            id: m.id,
+            ingredientId: m.ingredientId,
+            cantidad: toMoney(m.cantidad),
+            precioTotal: m.precioTotal == null ? null : toMoney(m.precioTotal),
+            fecha: m.fecha,
+            createdAt: m.createdAt,
+            unidadMedida: m.ingredient.unidadMedida,
+            unidadEtiqueta: m.ingredient.unidadEtiqueta,
+          },
+          historial,
+        );
+        return {
+          id: m.id,
+          producto: m.ingredient.nombre,
+          nota: m.nota,
+          etiqueta: formatStockCompra(
+            m.cantidad,
+            m.ingredient.unidadMedida,
+            m.ingredient.unidadEtiqueta,
+          ),
+          usuario: m.user?.name ?? "Sistema",
+          fecha: formatFechaCorta(m.fecha),
+          precio: precio.total,
+          unitario: precio.unitario,
+          vsAnterior: vs
+            ? { delta: vs.delta, fechaAnterior: vs.fechaAnterior }
+            : null,
+        };
+      })}
+      ultimas={ultimas}
       defaultFecha={periodo.fecha}
     />
   );

@@ -142,3 +142,15 @@ export function displayToStock(
     contenidoPorItem: display,
   }).cantidadStock;
 }
+
+/** Precio pagado dividido entre la cantidad visible (lb, kg, L, ud). */
+export function precioPorUnidad(
+  precioTotal: number,
+  cantidadStock: number,
+  unidad: UnidadInterna,
+  etiqueta?: string | null,
+): number | null {
+  const display = stockToDisplay(cantidadStock, unidad, etiqueta);
+  if (!(precioTotal > 0) || !(display > 0)) return null;
+  return precioTotal / display;
+}

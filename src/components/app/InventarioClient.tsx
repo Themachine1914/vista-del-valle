@@ -17,8 +17,9 @@ import {
   tipoFromIngredient,
   type TipoEntrada,
 } from "@/lib/inventory-units";
-import { formatStockCompra } from "@/lib/money";
+import { formatRD, formatRDUnitario, formatStockCompra } from "@/lib/money";
 import { type PeriodoFiltro } from "@/lib/period";
+import { type UltimaCompra } from "@/lib/inventory-precio";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -50,7 +51,19 @@ type CompraRow = {
   etiqueta: string;
   usuario: string;
   fecha: string;
+  precio: string;
+  unitario: string;
+  vsAnterior: { delta: number; fechaAnterior: string } | null;
 };
+
+function textoVsAnterior(vs: CompraRow["vsAnterior"]) {
+  if (!vs) return null;
+  if (Math.abs(vs.delta) < 0.005) {
+    return `Igual que el ${vs.fechaAnterior}`;
+  }
+  const verbo = vs.delta > 0 ? "subió" : "bajó";
+  return `${verbo} ${formatRDUnitario(Math.abs(vs.delta))} vs ${vs.fechaAnterior}`;
+}
 
 const ACCION_LABEL: Record<AuditRow["accion"], string> = {
   ALTA: "Alta",
@@ -120,6 +133,7 @@ export function InventarioClient({
   canAdjust,
   audits,
   compras,
+  ultimas,
   defaultFecha,
   periodo,
   resumen,
@@ -128,6 +142,7 @@ export function InventarioClient({
   canAdjust: boolean;
   audits: AuditRow[];
   compras: CompraRow[];
+  ultimas: Record<string, UltimaCompra>;
   defaultFecha: string;
   periodo: PeriodoFiltro;
   resumen: { altas: number; bajas: number; cambios: number; compras: number };
@@ -144,6 +159,7 @@ export function InventarioClient({
   const [cantidadItems, setCantidadItems] = useState(1);
   const [contenidoPorItem, setContenidoPorItem] = useState(1);
   const [stockMinimo, setStockMinimo] = useState(0);
+  const [precioTotal, setPrecioTotal] = useState("");
   const [nota, setNota] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -190,6 +206,15 @@ export function InventarioClient({
     }
   }, [tipoEntrada, unidadCustom, cantidadItems, contenidoPorItem]);
 
+  const previewUnitario = useMemo(() => {
+    const total = Number(precioTotal);
+    const display = cantidadItems * contenidoPorItem;
+    if (!(total > 0) || !(display > 0)) return null;
+    return total / display;
+  }, [precioTotal, cantidadItems, contenidoPorItem]);
+
+  const ultimaSel = modo === "existente" ? (ultimas[sel] ?? null) : null;
+
   const visible = rows.filter((r) => {
     if (soloAlertas && !r.bajo) return false;
     return r.nombre.toLowerCase().includes(q.toLowerCase());
@@ -209,6 +234,7 @@ export function InventarioClient({
       contenidoPorItem,
       stockMinimo,
       fecha,
+      precioTotal,
       nota,
     });
     setBusy(false);
@@ -223,6 +249,7 @@ export function InventarioClient({
     );
     setCantidadItems(1);
     setContenidoPorItem(1);
+    setPrecioTotal("");
     setNota("");
     setNombreNuevo("");
     router.refresh();
@@ -448,17 +475,47 @@ export function InventarioClient({
                 }
               />
             </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-fa-muted">Precio de esta compra (RD$)</span>
+              <input
+                type="number"
+                min={0.01}
+                step="0.01"
+                value={precioTotal}
+                onChange={(e) => setPrecioTotal(e.target.value)}
+                required
+                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+                placeholder="Lo que pagaste"
+              />
+            </label>
             <input
               value={nota}
               onChange={(e) => setNota(e.target.value)}
               placeholder="Nota (opcional)"
-              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-2"
+              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm"
             />
+            {ultimaSel ? (
+              <p className="text-sm text-fa-muted sm:col-span-2 lg:col-span-4">
+                Última compra: {ultimaSel.fecha} · {formatRD(ultimaSel.precioTotal)} ·{" "}
+                {formatRDUnitario(ultimaSel.unitario)} / {ultimaSel.etiquetaUnidad}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2 lg:col-span-4">
               <p className="text-sm text-fa-muted">
                 {preview
-                  ? `Total a sumar: ${preview} (${cantidadItems} × ${contenidoPorItem} ${unidadEtiqueta})`
-                  : "Indica cantidad y contenido"}
+                  ? `Total a sumar: ${preview} (${cantidadItems} × ${contenidoPorItem} ${unidadEtiqueta})${
+                      previewUnitario != null
+                        ? ` · ${formatRD(Number(precioTotal))} (${formatRDUnitario(previewUnitario)} / ${unidadEtiqueta})`
+                        : ""
+                    }`
+                  : "Indica cantidad, contenido y precio"}
+                {ultimaSel && previewUnitario != null
+                  ? Math.abs(previewUnitario - ultimaSel.unitario) < 0.005
+                    ? " · igual que la última"
+                    : previewUnitario > ultimaSel.unitario
+                      ? ` · sube ${formatRDUnitario(previewUnitario - ultimaSel.unitario)} / ${unidadEtiqueta} vs última`
+                      : ` · baja ${formatRDUnitario(ultimaSel.unitario - previewUnitario)} / ${unidadEtiqueta} vs última`
+                  : null}
               </p>
               <button
                 type="submit"
@@ -713,10 +770,14 @@ export function InventarioClient({
                 <th className="px-3 py-2">Fecha</th>
                 <th className="px-3 py-2">Producto</th>
                 <th className="px-3 py-2">Cantidad</th>
+                <th className="px-3 py-2">Precio</th>
+                <th className="px-3 py-2">Precio / unidad</th>
               </tr>
             </thead>
             <tbody>
-              {compras.map((c) => (
+              {compras.map((c) => {
+                const vs = textoVsAnterior(c.vsAnterior);
+                return (
                 <tr key={c.id} className="border-t border-fa-border">
                   <td className="px-3 py-2 text-fa-muted">{c.fecha}</td>
                   <td className="px-3 py-2">
@@ -727,11 +788,29 @@ export function InventarioClient({
                     <span className="block text-xs text-fa-muted">{c.usuario}</span>
                   </td>
                   <td className="px-3 py-2">{c.etiqueta}</td>
+                  <td className="px-3 py-2">{c.precio}</td>
+                  <td className="px-3 py-2">
+                    {c.unitario}
+                    {vs ? (
+                      <span
+                        className={`block text-xs ${
+                          c.vsAnterior && c.vsAnterior.delta > 0.005
+                            ? "text-red-700"
+                            : c.vsAnterior && c.vsAnterior.delta < -0.005
+                              ? "text-fa-accent"
+                              : "text-fa-muted"
+                        }`}
+                      >
+                        {vs}
+                      </span>
+                    ) : null}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
               {compras.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-fa-muted" colSpan={3}>
+                  <td className="px-3 py-4 text-fa-muted" colSpan={5}>
                     Aún no hay compras.
                   </td>
                 </tr>

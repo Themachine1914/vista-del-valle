@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toMoney, formatRD, formatQty, formatStockCompra, GRAMS_PER_LB } from "./money";
+import { toMoney, formatRD, formatRDUnitario, formatQty, formatStockCompra, GRAMS_PER_LB } from "./money";
 
 describe("toMoney", () => {
   it("returns 0 for null and undefined", () => {
@@ -19,6 +19,10 @@ describe("toMoney", () => {
 describe("formatRD", () => {
   it("formats a value as DOP currency with no decimals", () => {
     expect(formatRD(790)).toBe("RD$790");
+  });
+
+  it("formats unit prices with cents", () => {
+    expect(formatRDUnitario(24)).toBe("RD$24.00");
   });
 
   it("formats null as RD$0", () => {

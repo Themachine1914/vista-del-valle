@@ -15,6 +15,19 @@ export function formatRD(value: Decimal | number | string | null | undefined): s
   }).format(n);
 }
 
+/** Precio por unidad (lb, kg, L) con centavos para comparar compras. */
+export function formatRDUnitario(
+  value: Decimal | number | string | null | undefined,
+): string {
+  const n = toMoney(value);
+  return new Intl.NumberFormat("es-DO", {
+    style: "currency",
+    currency: "DOP",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
 export function formatQty(
   value: Decimal | number | string,
   unidad: "G" | "ML" | "UD",

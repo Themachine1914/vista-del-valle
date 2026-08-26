@@ -19,6 +19,8 @@ describe("buildInventarioRegistroPdf", () => {
           fecha: "2026-08-26 17:00",
           producto: "Arroz",
           etiqueta: "50 lb",
+          precio: "RD$1,200",
+          unitario: "RD$24.00 / lb",
           nota: "2 × 25 lb",
           usuario: "Administradora",
         },

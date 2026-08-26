@@ -118,6 +118,7 @@ const compraSchema = z.object({
   contenidoPorItem: z.coerce.number().positive(),
   stockMinimo: z.coerce.number().min(0),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  precioTotal: z.coerce.number().positive(),
   nota: z.string().max(200).optional(),
 });
 
@@ -256,6 +257,7 @@ export async function registrarCompraAction(raw: unknown) {
           ingredientId: ingredient.id,
           tipo: "ENTRADA",
           cantidad: conv.cantidadStock,
+          precioTotal: data.precioTotal,
           nota: notaCompra,
           fecha,
           userId: session.user.id,

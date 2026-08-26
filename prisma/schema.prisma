@@ -143,6 +143,7 @@ model InventoryMovement {
   ingredient   Ingredient   @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   tipo         MovementType
   cantidad     Decimal
+  precioTotal  Decimal?
   nota         String?
   fecha        DateTime     @default(now())
   userId       String?
