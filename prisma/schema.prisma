@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CAMARERO
+  COCINA
+}
+
+enum CategoryType {
+  COMIDA
+  BEBIDA
+}
+
+enum Turno {
+  DESAYUNO
+  ALMUERZO
+  CENA
+}
+
+enum UnidadMedida {
+  G
+  ML
+  UD
+}
+
+enum MovementType {
+  ENTRADA
+  VENTA
+  AJUSTE
+}
+
+model User {
+  id           String               @id @default(cuid())
+  name         String
+  email        String               @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  movements    InventoryMovement[]
+  saleItems    SaleItem[]
+}
+
+model Category {
+  id        String       @id
+  nombre    String
+  tipo      CategoryType
+  esInterna Boolean      @default(false)
+  orden     Int          @default(0)
+  dishes    Dish[]
+}
+
+model Dish {
+  id                String     @id
+  nombre            String
+  descripcion       String?
+  precio            Decimal?
+  foto              String?
+  categoryId        String
+  category          Category   @relation(fields: [categoryId], references: [id])
+  disponible        Boolean    @default(true)
+  destacado         Boolean    @default(false)
+  incluyeGuarnicion Boolean    @default(false)
+  recipe            Recipe?
+  saleItems         SaleItem[]
+  garnishItems      SaleItem[] @relation("Garnish")
+}
+
+model Ingredient {
+  id           String               @id
+  nombre       String               @unique
+  unidadMedida UnidadMedida
+  stockActual  Decimal
+  stockMinimo  Decimal
+  recipeItems  RecipeIngredient[]
+  movements    InventoryMovement[]
+}
+
+model Recipe {
+  id                String             @id @default(cuid())
+  dishId            String             @unique
+  dish              Dish               @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  porcionesQueRinde Int                @default(1)
+  tiempoPreparacion Int?
+  pasos             Json
+  ingredients       RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  recipeId     String
+  ingredientId String
+  cantidad     Decimal
+  recipe       Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@id([recipeId, ingredientId])
+}
+
+model Sale {
+  id        String     @id @default(cuid())
+  fecha     DateTime
+  turno     Turno
+  items     SaleItem[]
+  createdAt DateTime   @default(now())
+
+  @@unique([fecha, turno])
+}
+
+model SaleItem {
+  id             String   @id @default(cuid())
+  saleId         String
+  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  dishId         String
+  dish           Dish     @relation(fields: [dishId], references: [id])
+  cantidad       Int
+  precioUnitario Decimal
+  garnishId      String?
+  garnish        Dish?    @relation("Garnish", fields: [garnishId], references: [id])
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  createdAt      DateTime @default(now())
+}
+
+model InventoryMovement {
+  id           String       @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient   @relation(fields: [ingredientId], references: [id])
+  tipo         MovementType
+  cantidad     Decimal
+  nota         String?
+  userId       String?
+  user         User?        @relation(fields: [userId], references: [id])
+  createdAt    DateTime     @default(now())
+}

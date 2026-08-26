@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" fill="none">
+  <rect width="800" height="600" fill="#DCE6DC"/>
+  <path d="M0 420 Q120 340 240 380 T480 360 T800 300 V600 H0Z" fill="#C45C26" fill-opacity="0.22"/>
+  <path d="M0 260 L140 160 L260 230 L400 110 L540 210 L680 90 L800 180 V600 H0Z" fill="#C45C26" fill-opacity="0.35"/>
+  <circle cx="640" cy="90" r="36" fill="#E8C872" fill-opacity="0.7"/>
+  <text x="40" y="540" font-family="Georgia, serif" font-size="36" fill="#C45C26">Caldo</text>
+</svg>

@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --pine: #163528;
+  --fern: #2f5d45;
+  --mist: #dce6dc;
+  --paper: #eef3ec;
+  --clay: #b85c38;
+  --lamp: #e8c872;
+  --ink: #1a1510;
+  --ink-soft: #4a4238;
+  --line: #c5d1c5;
+  --fa-primary: #0b3a6e;
+  --fa-primary-soft: #1e4d8c;
+  --fa-accent: #00a8a8;
+  --fa-accent-light: #00c4b4;
+  --fa-bg: #f8fafc;
+  --fa-surface: #ffffff;
+  --fa-text: #0f172a;
+  --fa-text-secondary: #475569;
+  --fa-border: #e2e8f0;
+  --fa-radius: 10px;
+}
+
+@theme inline {
+  --color-pine: var(--pine);
+  --color-fern: var(--fern);
+  --color-mist: var(--mist);
+  --color-paper: var(--paper);
+  --color-clay: var(--clay);
+  --color-lamp: var(--lamp);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-fa-primary: var(--fa-primary);
+  --color-fa-primary-soft: var(--fa-primary-soft);
+  --color-fa-accent: var(--fa-accent);
+  --color-fa-bg: var(--fa-bg);
+  --color-fa-surface: var(--fa-surface);
+  --color-fa-text: var(--fa-text);
+  --color-fa-muted: var(--fa-text-secondary);
+  --color-fa-border: var(--fa-border);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-outfit);
+  --font-app: var(--font-geist-sans);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+[data-theme="app"] {
+  background: var(--fa-bg);
+  color: var(--fa-text);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.ridge {
+  height: 18px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 40' fill='none'%3E%3Cpath d='M0 32 L80 18 L160 28 L280 8 L400 24 L520 6 L640 22 L800 10' stroke='%23163528' stroke-width='1.4'/%3E%3Cpath d='M0 36 L120 26 L240 34 L360 20 L500 30 L680 16 L800 28' stroke='%232f5d45' stroke-width='1' opacity='0.7'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
