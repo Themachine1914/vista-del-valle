@@ -50,6 +50,7 @@ export default async function AdminPage() {
         id: i.id,
         nombre: i.nombre,
         unidadMedida: i.unidadMedida,
+        stockActual: toMoney(i.stockActual),
         stockMinimo: toMoney(i.stockMinimo),
       }))}
       recipes={recipes.map((r) => ({

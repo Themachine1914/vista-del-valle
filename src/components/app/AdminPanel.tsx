@@ -4,6 +4,7 @@ import {
   createCategoryAction,
   createDishAction,
   createIngredientAction,
+  deleteIngredientAction,
   saveRecipeAction,
   updateDishAction,
   updateIngredientAction,
@@ -35,6 +36,7 @@ type Ing = {
   id: string;
   nombre: string;
   unidadMedida: "G" | "ML" | "UD";
+  stockActual: number;
   stockMinimo: number;
 };
 type Rec = {
@@ -231,6 +233,7 @@ function Ingredientes({ ingredients }: { ingredients: Ing[] }) {
             <tr className="bg-fa-bg text-left text-fa-muted">
               <th className="px-3 py-2">Nombre</th>
               <th className="px-3 py-2">Unidad</th>
+              <th className="px-3 py-2">Stock actual</th>
               <th className="px-3 py-2">Mínimo</th>
               <th className="px-3 py-2" />
             </tr>
@@ -238,7 +241,7 @@ function Ingredientes({ ingredients }: { ingredients: Ing[] }) {
           <tbody>
             {ingredients.map((i) => (
               <tr key={i.id} className="border-t border-fa-border">
-                <td className="px-3 py-2" colSpan={4}>
+                <td className="px-3 py-2" colSpan={5}>
                   <form action={updateIngredientAction} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="id" value={i.id} />
                     <input
@@ -246,15 +249,49 @@ function Ingredientes({ ingredients }: { ingredients: Ing[] }) {
                       defaultValue={i.nombre}
                       className="min-w-40 flex-1 rounded-md border border-fa-border px-2 py-1"
                     />
-                    <span className="text-fa-muted">{i.unidadMedida}</span>
+                    <select
+                      name="unidadMedida"
+                      defaultValue={i.unidadMedida}
+                      className="rounded-md border border-fa-border px-2 py-1"
+                    >
+                      <option value="G">g</option>
+                      <option value="ML">ml</option>
+                      <option value="UD">ud</option>
+                    </select>
+                    <input
+                      name="stockActual"
+                      type="number"
+                      step="0.001"
+                      defaultValue={i.stockActual}
+                      className="w-28 rounded-md border border-fa-border px-2 py-1"
+                    />
                     <input
                       name="stockMinimo"
                       type="number"
+                      step="0.001"
                       defaultValue={i.stockMinimo}
                       className="w-28 rounded-md border border-fa-border px-2 py-1"
                     />
                     <button className="rounded-md bg-fa-primary px-2 py-1 text-xs text-white">
                       Guardar
+                    </button>
+                  </form>
+                  <form
+                    action={deleteIngredientAction}
+                    className="mt-1 inline"
+                    onSubmit={(e) => {
+                      if (
+                        !window.confirm(
+                          `¿Borrar "${i.nombre}"? Esto también elimina sus líneas de receta y su historial de movimientos.`,
+                        )
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+                    <input type="hidden" name="id" value={i.id} />
+                    <button className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-700">
+                      Borrar
                     </button>
                   </form>
                 </td>

@@ -64,12 +64,32 @@ export async function updateIngredientAction(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const nombre = String(formData.get("nombre") ?? "").trim();
+  const unidadMedidaRaw = String(formData.get("unidadMedida") ?? "");
+  const stockActual = Number(formData.get("stockActual"));
   const stockMinimo = Number(formData.get("stockMinimo"));
-  if (!id || !nombre || Number.isNaN(stockMinimo)) throw new Error("Datos inválidos");
+  if (
+    !id ||
+    !nombre ||
+    Number.isNaN(stockActual) ||
+    Number.isNaN(stockMinimo)
+  ) {
+    throw new Error("Datos inválidos");
+  }
+  const unidadMedida =
+    unidadMedidaRaw === "ML" || unidadMedidaRaw === "UD" ? unidadMedidaRaw : "G";
   await prisma.ingredient.update({
     where: { id },
-    data: { nombre, stockMinimo },
+    data: { nombre, unidadMedida, stockActual, stockMinimo },
   });
+  revalidatePath("/admin");
+  revalidatePath("/inventario");
+}
+
+export async function deleteIngredientAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Falta el ingrediente");
+  await prisma.ingredient.delete({ where: { id } });
   revalidatePath("/admin");
   revalidatePath("/inventario");
 }
