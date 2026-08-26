@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { toMoney } from "@/lib/money";
+import { parsePeriodo, type PeriodoFiltro } from "@/lib/period";
 import { canRegisterSales, homeForRole } from "@/lib/roles";
 import { redirect } from "next/navigation";
 import {
@@ -8,19 +9,23 @@ import {
   type DishOption,
   type DishRecipeInfo,
   type SaleLine,
+  type VentasDesglose,
 } from "@/components/app/VentasClient";
 
 export const dynamic = "force-dynamic";
 
-function todayISO() {
-  const n = new Date();
-  return n.toISOString().slice(0, 10);
-}
-
 export default async function VentasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fecha?: string; turno?: string }>;
+  searchParams: Promise<{
+    fecha?: string;
+    turno?: string;
+    periodo?: string;
+    mes?: string;
+    anio?: string;
+    desde?: string;
+    hasta?: string;
+  }>;
 }) {
   const session = await auth();
   if (!session?.user || !canRegisterSales(session.user.role)) {
@@ -28,7 +33,8 @@ export default async function VentasPage({
   }
 
   const sp = await searchParams;
-  const fecha = sp.fecha && /^\d{4}-\d{2}-\d{2}$/.test(sp.fecha) ? sp.fecha : todayISO();
+  const periodo = parsePeriodo(sp);
+  const fecha = periodo.fecha;
   const turno =
     sp.turno === "DESAYUNO" || sp.turno === "CENA" || sp.turno === "ALMUERZO"
       ? sp.turno
@@ -37,7 +43,7 @@ export default async function VentasPage({
   const [y, m, d] = fecha.split("-").map(Number);
   const day = new Date(Date.UTC(y, m - 1, d));
 
-  const [dishes, sale, users, recipes] = await Promise.all([
+  const [dishes, sale, users, recipes, salesPeriodo] = await Promise.all([
     prisma.dish.findMany({
       where: { disponible: true },
       include: { category: true },
@@ -55,6 +61,11 @@ export default async function VentasPage({
     prisma.user.findMany({ select: { id: true, name: true } }),
     prisma.recipe.findMany({
       include: { ingredients: { include: { ingredient: true } } },
+    }),
+    prisma.sale.findMany({
+      where: { fecha: { gte: periodo.gte, lt: periodo.lt } },
+      include: { items: true },
+      orderBy: { fecha: "asc" },
     }),
   ]);
 
@@ -96,26 +107,61 @@ export default async function VentasPage({
       camarero: it.userId ? (userMap.get(it.userId) ?? null) : null,
     })) ?? [];
 
-  const totalDiaRows = await prisma.sale.findMany({
-    where: { fecha: day },
-    include: { items: true },
-  });
-  const totalDia = totalDiaRows.reduce(
-    (acc, s) =>
-      acc +
-      s.items.reduce((a, it) => a + it.cantidad * toMoney(it.precioUnitario), 0),
-    0,
-  );
+  let totalPeriodo = 0;
+  let unidadesPeriodo = 0;
+  const buckets = new Map<string, { total: number; unidades: number }>();
+
+  for (const s of salesPeriodo) {
+    const iso = s.fecha.toISOString().slice(0, 10);
+    const clave =
+      periodo.modo === "dia"
+        ? s.turno
+        : periodo.modo === "anio"
+          ? iso.slice(0, 7)
+          : iso;
+    for (const it of s.items) {
+      const lineTotal = it.cantidad * toMoney(it.precioUnitario);
+      totalPeriodo += lineTotal;
+      unidadesPeriodo += it.cantidad;
+      const b = buckets.get(clave) ?? { total: 0, unidades: 0 };
+      b.total += lineTotal;
+      b.unidades += it.cantidad;
+      buckets.set(clave, b);
+    }
+  }
+
+  const TURNO_ORDEN = ["DESAYUNO", "ALMUERZO", "CENA"];
+  const desglose: VentasDesglose[] = [...buckets.entries()]
+    .map(([clave, v]) => ({ clave, ...v }))
+    .sort((a, b) => {
+      if (periodo.modo === "dia") {
+        return TURNO_ORDEN.indexOf(a.clave) - TURNO_ORDEN.indexOf(b.clave);
+      }
+      return a.clave.localeCompare(b.clave);
+    });
+
+  const filtro: PeriodoFiltro = {
+    modo: periodo.modo,
+    fecha: periodo.fecha,
+    mes: periodo.mes,
+    anio: periodo.anio,
+    desde: periodo.desde,
+    hasta: periodo.hasta,
+    label: periodo.label,
+  };
 
   return (
-      <VentasClient
-        fecha={fecha}
-        turno={turno}
-        dishes={options}
-        garnishes={garnishes}
-        lines={lines}
-        totalDia={totalDia}
-        recipesByDish={recipesByDish}
-      />
+    <VentasClient
+      fecha={fecha}
+      turno={turno}
+      periodo={filtro}
+      dishes={options}
+      garnishes={garnishes}
+      lines={lines}
+      totalPeriodo={totalPeriodo}
+      unidadesPeriodo={unidadesPeriodo}
+      desglose={desglose}
+      recipesByDish={recipesByDish}
+    />
   );
 }

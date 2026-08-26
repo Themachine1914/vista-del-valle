@@ -1,26 +1,41 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { formatFechaCorta, formatStockCompra, toMoney, todayISO } from "@/lib/money";
+import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
+import { parsePeriodo, periodoQuery, type PeriodoFiltro } from "@/lib/period";
 import { InventarioClient } from "@/components/app/InventarioClient";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventarioPage() {
+export default async function InventarioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    periodo?: string;
+    fecha?: string;
+    mes?: string;
+    anio?: string;
+    desde?: string;
+    hasta?: string;
+  }>;
+}) {
   const session = await auth();
   if (session?.user.role === "CAMARERO") redirect("/ventas");
   const canAdjust = session?.user.role === "ADMIN";
+  const sp = await searchParams;
+  const periodo = parsePeriodo({ ...sp, periodo: sp.periodo ?? "mes" });
+  const range = { gte: periodo.gte, lt: periodo.lt };
+
   const [ingredients, audits, compras] = await Promise.all([
     prisma.ingredient.findMany({ orderBy: { nombre: "asc" } }),
     prisma.inventoryAudit.findMany({
+      where: { createdAt: range },
       orderBy: { createdAt: "desc" },
-      take: 80,
       include: { user: { select: { name: true } } },
     }),
     prisma.inventoryMovement.findMany({
-      where: { tipo: "ENTRADA" },
+      where: { tipo: "ENTRADA", fecha: range },
       orderBy: { fecha: "desc" },
-      take: 40,
       include: {
         ingredient: { select: { nombre: true, unidadMedida: true } },
         user: { select: { name: true } },
@@ -37,10 +52,28 @@ export default async function InventarioPage() {
     etiqueta: formatStockCompra(i.stockActual, i.unidadMedida),
     minimoEtiqueta: formatStockCompra(i.stockMinimo, i.unidadMedida),
   }));
+  const filtro: PeriodoFiltro = {
+    modo: periodo.modo,
+    fecha: periodo.fecha,
+    mes: periodo.mes,
+    anio: periodo.anio,
+    desde: periodo.desde,
+    hasta: periodo.hasta,
+    label: periodo.label,
+  };
+  const resumen = {
+    altas: audits.filter((a) => a.accion === "ALTA").length,
+    bajas: audits.filter((a) => a.accion === "BAJA").length,
+    cambios: audits.filter((a) => a.accion === "RENOMBRE").length,
+    compras: compras.length,
+  };
   return (
     <InventarioClient
       rows={rows}
       canAdjust={canAdjust}
+      periodo={filtro}
+      resumen={resumen}
+      pdfHref={`/api/inventario/registro?${periodoQuery(filtro)}`}
       audits={audits.map((a) => ({
         id: a.id,
         accion: a.accion,
@@ -57,7 +90,7 @@ export default async function InventarioPage() {
         usuario: m.user?.name ?? "Sistema",
         fecha: formatFechaCorta(m.fecha),
       }))}
-      defaultFecha={todayISO()}
+      defaultFecha={periodo.fecha}
     />
   );
 }

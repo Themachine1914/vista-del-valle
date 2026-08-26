@@ -3,17 +3,19 @@
 import {
   ajustarInventarioAction,
   borrarProductoAction,
+  guardarProductoAction,
   registrarCompraAction,
-  renombrarProductoAction,
-  resetearInventarioAction,
 } from "@/app/actions/inventario";
+import { PeriodFilter } from "@/components/app/PeriodFilter";
 import {
   etiquetaTipo,
   purchaseToStock,
+  stockToDisplay,
   tipoFromUnidad,
   type TipoEntrada,
 } from "@/lib/inventory-units";
 import { formatStockCompra } from "@/lib/money";
+import { type PeriodoFiltro } from "@/lib/period";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -49,9 +51,13 @@ type CompraRow = {
 const ACCION_LABEL: Record<AuditRow["accion"], string> = {
   ALTA: "Alta",
   BAJA: "Baja",
-  RENOMBRE: "Renombre",
+  RENOMBRE: "Cambio",
   RESET: "Cero",
 };
+
+function round3(n: number) {
+  return Math.round(n * 1000) / 1000;
+}
 
 export function InventarioClient({
   rows,
@@ -59,12 +65,18 @@ export function InventarioClient({
   audits,
   compras,
   defaultFecha,
+  periodo,
+  resumen,
+  pdfHref,
 }: {
   rows: Row[];
   canAdjust: boolean;
   audits: AuditRow[];
   compras: CompraRow[];
   defaultFecha: string;
+  periodo: PeriodoFiltro;
+  resumen: { altas: number; bajas: number; cambios: number; compras: number };
+  pdfHref: string;
 }) {
   const router = useRouter();
   const [soloAlertas, setSoloAlertas] = useState(false);
@@ -76,6 +88,7 @@ export function InventarioClient({
   const [tipoEntrada, setTipoEntrada] = useState<TipoEntrada>("LIBRA");
   const [cantidadItems, setCantidadItems] = useState(1);
   const [contenidoPorItem, setContenidoPorItem] = useState(1);
+  const [stockMinimo, setStockMinimo] = useState(0);
   const [nota, setNota] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,6 +97,8 @@ export function InventarioClient({
   const [ajusteCantidad, setAjusteCantidad] = useState(0);
   const [ajusteNota, setAjusteNota] = useState("");
   const [nombres, setNombres] = useState<Record<string, string>>({});
+  const [tiposFila, setTiposFila] = useState<Record<string, TipoEntrada>>({});
+  const [minimos, setMinimos] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (rows.length === 0) return;
@@ -93,17 +108,21 @@ export function InventarioClient({
     }
   }, [rows, sel, ajusteSel]);
 
-  const seleccionado = rows.find((r) => r.id === sel);
-  const tipoBloqueado = modo === "existente" && seleccionado
-    ? tipoFromUnidad(seleccionado.unidadMedida)
-    : tipoEntrada;
-  const unidadEtiqueta = etiquetaTipo(tipoBloqueado);
+  useEffect(() => {
+    if (modo !== "existente") return;
+    const row = rows.find((r) => r.id === sel);
+    if (!row) return;
+    setTipoEntrada(tipoFromUnidad(row.unidadMedida));
+    setStockMinimo(round3(stockToDisplay(row.stockMinimo, row.unidadMedida)));
+  }, [modo, sel, rows]);
+
+  const unidadEtiqueta = etiquetaTipo(tipoEntrada);
 
   const preview = useMemo(() => {
     if (cantidadItems <= 0 || contenidoPorItem <= 0) return null;
     try {
       const conv = purchaseToStock({
-        tipoEntrada: tipoBloqueado,
+        tipoEntrada,
         cantidadItems,
         contenidoPorItem,
       });
@@ -111,7 +130,7 @@ export function InventarioClient({
     } catch {
       return null;
     }
-  }, [tipoBloqueado, cantidadItems, contenidoPorItem]);
+  }, [tipoEntrada, cantidadItems, contenidoPorItem]);
 
   const visible = rows.filter((r) => {
     if (soloAlertas && !r.bajo) return false;
@@ -126,9 +145,10 @@ export function InventarioClient({
     const res = await registrarCompraAction({
       ingredientId: modo === "existente" ? sel : undefined,
       nombreNuevo: modo === "nuevo" ? nombreNuevo : undefined,
-      tipoEntrada: tipoBloqueado,
+      tipoEntrada,
       cantidadItems,
       contenidoPorItem,
+      stockMinimo,
       fecha,
       nota,
     });
@@ -168,14 +188,24 @@ export function InventarioClient({
     router.refresh();
   }
 
-  async function renombrar(id: string) {
-    const nombre = (nombres[id] ?? rows.find((r) => r.id === id)?.nombre ?? "").trim();
-    const res = await renombrarProductoAction({ id, nombre });
+  async function guardar(id: string) {
+    const row = rows.find((r) => r.id === id);
+    const nombre = (nombres[id] ?? row?.nombre ?? "").trim();
+    const tipo = tiposFila[id] ?? (row ? tipoFromUnidad(row.unidadMedida) : "LIBRA");
+    const minimo =
+      minimos[id] ??
+      (row ? round3(stockToDisplay(row.stockMinimo, row.unidadMedida)) : 0);
+    const res = await guardarProductoAction({
+      id,
+      nombre,
+      tipoEntrada: tipo,
+      stockMinimo: minimo,
+    });
     if (!res.ok) {
       setMsg(res.error);
       return;
     }
-    setMsg("Nombre actualizado");
+    setMsg("Producto actualizado");
     router.refresh();
   }
 
@@ -196,23 +226,6 @@ export function InventarioClient({
     router.refresh();
   }
 
-  async function resetear() {
-    if (
-      !window.confirm(
-        "¿Poner el stock de TODOS los productos en 0? El registro de altas y bajas se conserva. El historial de compras se reinicia.",
-      )
-    ) {
-      return;
-    }
-    const res = await resetearInventarioAction();
-    if (!res.ok) {
-      setMsg(res.error);
-      return;
-    }
-    setMsg(`Inventario en cero (${res.count} productos)`);
-    router.refresh();
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -222,15 +235,29 @@ export function InventarioClient({
             {rows.filter((r) => r.bajo).length} productos bajo el mínimo
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={soloAlertas}
-            onChange={(e) => setSoloAlertas(e.target.checked)}
-          />
-          Solo alertas
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={soloAlertas}
+              onChange={(e) => setSoloAlertas(e.target.checked)}
+            />
+            Solo alertas
+          </label>
+          <a
+            href={pdfHref}
+            className="rounded-[10px] bg-fa-primary px-3 py-2 text-sm font-medium text-white"
+          >
+            Descargar registro PDF
+          </a>
+        </div>
       </div>
+
+      <PeriodFilter basePath="/inventario" periodo={periodo} />
+      <p className="text-sm text-fa-muted">
+        {periodo.label}: {resumen.altas} altas · {resumen.bajas} bajas · {resumen.cambios}{" "}
+        cambios · {resumen.compras} compras
+      </p>
 
       <input
         value={q}
@@ -297,15 +324,28 @@ export function InventarioClient({
             <label className="text-sm">
               <span className="mb-1 block text-fa-muted">Entrada por</span>
               <select
-                value={tipoBloqueado}
+                value={tipoEntrada}
                 onChange={(e) => setTipoEntrada(e.target.value as TipoEntrada)}
-                disabled={modo === "existente"}
-                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm disabled:bg-fa-bg"
+                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
               >
                 <option value="LIBRA">Libra</option>
                 <option value="LITRO">Volumen (litro)</option>
                 <option value="UNIDAD">Unidad</option>
               </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-fa-muted">
+                Límite mínimo ({unidadEtiqueta})
+              </span>
+              <input
+                type="number"
+                min={0}
+                step="0.001"
+                value={stockMinimo}
+                onChange={(e) => setStockMinimo(Number(e.target.value))}
+                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+                placeholder="Alerta si baja de este nivel"
+              />
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-fa-muted">Cantidad de ítems</span>
@@ -331,9 +371,9 @@ export function InventarioClient({
                 onChange={(e) => setContenidoPorItem(Number(e.target.value))}
                 className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
                 placeholder={
-                  tipoBloqueado === "LIBRA"
+                  tipoEntrada === "LIBRA"
                     ? "Ej. 25 si cada saco pesa 25 lb"
-                    : tipoBloqueado === "LITRO"
+                    : tipoEntrada === "LITRO"
                       ? "Ej. 1.5 si cada botella es 1.5 L"
                       : "Ej. 1 o 12 si es un paquete"
                 }
@@ -436,6 +476,7 @@ export function InventarioClient({
             <tr>
               <th className="px-3 py-2">Producto</th>
               <th className="px-3 py-2">Stock</th>
+              <th className="px-3 py-2">Entrada</th>
               <th className="px-3 py-2">Mínimo</th>
               {canAdjust ? <th className="px-3 py-2">Acciones</th> : null}
             </tr>
@@ -460,16 +501,62 @@ export function InventarioClient({
                   )}
                 </td>
                 <td className="px-3 py-2">{r.etiqueta}</td>
-                <td className="px-3 py-2">{r.minimoEtiqueta}</td>
+                <td className="px-3 py-2">
+                  {canAdjust ? (
+                    <select
+                      value={tiposFila[r.id] ?? tipoFromUnidad(r.unidadMedida)}
+                      onChange={(e) =>
+                        setTiposFila((prev) => ({
+                          ...prev,
+                          [r.id]: e.target.value as TipoEntrada,
+                        }))
+                      }
+                      className="rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
+                    >
+                      <option value="LIBRA">Libra</option>
+                      <option value="LITRO">Litro</option>
+                      <option value="UNIDAD">Unidad</option>
+                    </select>
+                  ) : (
+                    etiquetaTipo(tipoFromUnidad(r.unidadMedida))
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  {canAdjust ? (
+                    <label className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.001"
+                        value={
+                          minimos[r.id] ??
+                          round3(stockToDisplay(r.stockMinimo, r.unidadMedida))
+                        }
+                        onChange={(e) =>
+                          setMinimos((prev) => ({
+                            ...prev,
+                            [r.id]: Number(e.target.value),
+                          }))
+                        }
+                        className="w-24 rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
+                      />
+                      <span className="text-xs text-fa-muted">
+                        {etiquetaTipo(tiposFila[r.id] ?? tipoFromUnidad(r.unidadMedida))}
+                      </span>
+                    </label>
+                  ) : (
+                    r.minimoEtiqueta
+                  )}
+                </td>
                 {canAdjust ? (
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => void renombrar(r.id)}
+                        onClick={() => void guardar(r.id)}
                         className="rounded-md bg-fa-primary px-2 py-1 text-xs text-white"
                       >
-                        Guardar nombre
+                        Guardar
                       </button>
                       <button
                         type="button"
@@ -485,7 +572,7 @@ export function InventarioClient({
             ))}
             {visible.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-fa-muted" colSpan={canAdjust ? 4 : 3}>
+                <td className="px-3 py-6 text-fa-muted" colSpan={canAdjust ? 5 : 4}>
                   No hay productos.
                 </td>
               </tr>
@@ -494,25 +581,10 @@ export function InventarioClient({
         </table>
       </div>
 
-      {canAdjust ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-800">
-            Poner todo el inventario en cero. Los productos y el registro de altas/bajas se quedan; las compras anteriores se limpian.
-          </p>
-          <button
-            type="button"
-            onClick={() => void resetear()}
-            className="rounded-[10px] border border-red-400 bg-white px-3 py-2 text-sm font-medium text-red-800"
-          >
-            Poner todo en cero
-          </button>
-        </div>
-      ) : null}
-
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
           <h2 className="border-b border-fa-border px-3 py-2 text-sm font-semibold text-fa-primary">
-            Registro de altas, bajas y cambios
+            Registro de altas, bajas y cambios · {periodo.label}
           </h2>
           <table className="w-full text-left text-sm">
             <thead className="bg-fa-bg text-fa-muted">
@@ -548,7 +620,7 @@ export function InventarioClient({
         </div>
         <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
           <h2 className="border-b border-fa-border px-3 py-2 text-sm font-semibold text-fa-primary">
-            Compras registradas
+            Compras registradas · {periodo.label}
           </h2>
           <table className="w-full text-left text-sm">
             <thead className="bg-fa-bg text-fa-muted">

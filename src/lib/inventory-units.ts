@@ -39,3 +39,21 @@ export function purchaseToStock(params: {
   }
   return { unidadMedida: "UD", cantidadStock: total };
 }
+
+export function stockToDisplay(
+  value: number,
+  unidad: "G" | "ML" | "UD",
+): number {
+  if (unidad === "UD") return value;
+  if (unidad === "ML") return value / 1000;
+  return value / GRAMS_PER_LB;
+}
+
+export function displayToStock(display: number, tipo: TipoEntrada): number {
+  if (!(display > 0)) return 0;
+  return purchaseToStock({
+    tipoEntrada: tipo,
+    cantidadItems: 1,
+    contenidoPorItem: display,
+  }).cantidadStock;
+}

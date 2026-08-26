@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeDeductionQty } from "./inventory";
 import { GRAMS_PER_LB } from "./money";
-import { purchaseToStock } from "./inventory-units";
+import { purchaseToStock, displayToStock, stockToDisplay } from "./inventory-units";
 
 describe("computeDeductionQty", () => {
   it("deducts the exact recipe quantity when units sold equals the yield", () => {
@@ -81,5 +81,18 @@ describe("purchaseToStock", () => {
         contenidoPorItem: 25,
       }),
     ).toThrow("La cantidad debe ser mayor que 0");
+  });
+});
+
+describe("stock display conversion", () => {
+  it("round-trips pounds through grams", () => {
+    const internal = displayToStock(25, "LIBRA");
+    expect(internal).toBeCloseTo(25 * GRAMS_PER_LB, 5);
+    expect(stockToDisplay(internal, "G")).toBeCloseTo(25, 5);
+  });
+
+  it("treats zero display as zero stock", () => {
+    expect(displayToStock(0, "LITRO")).toBe(0);
+    expect(stockToDisplay(0, "ML")).toBe(0);
   });
 });

@@ -1,8 +1,10 @@
 "use client";
 
 import { registrarVentaAction } from "@/app/actions/ventas";
-import { formatRD, formatStockCompra } from "@/lib/money";
+import { PeriodFilter } from "@/components/app/PeriodFilter";
 import { LiveRefresh } from "@/components/app/LiveRefresh";
+import { formatRD, formatStockCompra } from "@/lib/money";
+import { periodoQuery, type PeriodoFiltro } from "@/lib/period";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -31,6 +33,41 @@ type TicketItem = {
   garnishId: string | null;
   precioUnitario: number | null;
 };
+
+export type VentasDesglose = {
+  clave: string;
+  total: number;
+  unidades: number;
+};
+
+const TURNO_LABEL: Record<string, string> = {
+  DESAYUNO: "Desayuno",
+  ALMUERZO: "Almuerzo",
+  CENA: "Cena",
+};
+
+function etiquetaDesglose(clave: string, modo: PeriodoFiltro["modo"]): string {
+  if (modo === "dia") return TURNO_LABEL[clave] ?? clave;
+  if (/^\d{4}-\d{2}$/.test(clave)) {
+    const [y, m] = clave.split("-");
+    const nombres = [
+      "ene",
+      "feb",
+      "mar",
+      "abr",
+      "may",
+      "jun",
+      "jul",
+      "ago",
+      "sep",
+      "oct",
+      "nov",
+      "dic",
+    ];
+    return `${nombres[Number(m) - 1]} ${y}`;
+  }
+  return clave;
+}
 
 export type DishRecipeInfo = {
   porcionesQueRinde: number;
@@ -105,18 +142,24 @@ function computeInventoryImpact(
 export function VentasClient({
   fecha,
   turno,
+  periodo,
   dishes,
   garnishes,
   lines,
-  totalDia,
+  totalPeriodo,
+  unidadesPeriodo,
+  desglose,
   recipesByDish,
 }: {
   fecha: string;
   turno: "DESAYUNO" | "ALMUERZO" | "CENA";
+  periodo: PeriodoFiltro;
   dishes: DishOption[];
   garnishes: DishOption[];
   lines: SaleLine[];
-  totalDia: number;
+  totalPeriodo: number;
+  unidadesPeriodo: number;
+  desglose: VentasDesglose[];
   recipesByDish: Record<string, DishRecipeInfo>;
 }) {
   const router = useRouter();
@@ -182,23 +225,76 @@ export function VentasClient({
   }
 
   function go(nextFecha: string, nextTurno: string) {
-    router.push(`/ventas?fecha=${nextFecha}&turno=${nextTurno}`);
+    router.push(
+      `/ventas?${periodoQuery({ ...periodo, fecha: nextFecha }, { turno: nextTurno })}`,
+    );
   }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <section>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-semibold text-fa-primary">Ventas del día</h1>
+          <h1 className="text-2xl font-semibold text-fa-primary">Ventas</h1>
           <LiveRefresh />
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => go(e.target.value, turno)}
-            className="rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+        <div className="mt-3">
+          <PeriodFilter
+            basePath="/ventas"
+            periodo={periodo}
+            extra={{ turno }}
           />
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-[10px] border border-fa-border bg-fa-surface p-3">
+            <p className="text-xs text-fa-muted">Total · {periodo.label}</p>
+            <p className="text-xl font-semibold text-fa-primary">{formatRD(totalPeriodo)}</p>
+          </div>
+          <div className="rounded-[10px] border border-fa-border bg-fa-surface p-3">
+            <p className="text-xs text-fa-muted">Platos y bebidas</p>
+            <p className="text-xl font-semibold text-fa-primary">{unidadesPeriodo}</p>
+          </div>
+        </div>
+        {desglose.length > 0 ? (
+          <div className="mt-3 overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-fa-bg text-fa-muted">
+                <tr>
+                  <th className="px-3 py-2">
+                    {periodo.modo === "dia"
+                      ? "Turno"
+                      : periodo.modo === "anio"
+                        ? "Mes"
+                        : "Día"}
+                  </th>
+                  <th className="px-3 py-2">Unidades</th>
+                  <th className="px-3 py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {desglose.map((row) => (
+                  <tr key={row.clave} className="border-t border-fa-border">
+                    <td className="px-3 py-2">{etiquetaDesglose(row.clave, periodo.modo)}</td>
+                    <td className="px-3 py-2">{row.unidades}</td>
+                    <td className="px-3 py-2 font-medium">{formatRD(row.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-fa-muted">No hay ventas en {periodo.label}.</p>
+        )}
+
+        <h2 className="mt-6 text-sm font-semibold text-fa-primary">Registrar en un día</h2>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {periodo.modo !== "dia" ? (
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => go(e.target.value, turno)}
+              className="rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+            />
+          ) : null}
           {(["DESAYUNO", "ALMUERZO", "CENA"] as const).map((t) => (
             <button
               key={t}
@@ -212,10 +308,6 @@ export function VentasClient({
             </button>
           ))}
         </div>
-        <p className="mt-3 text-sm text-fa-muted">
-          Total del día (todos los turnos):{" "}
-          <strong className="text-fa-primary">{formatRD(totalDia)}</strong>
-        </p>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <input

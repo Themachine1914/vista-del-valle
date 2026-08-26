@@ -4,16 +4,40 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { adjustStock, slugIngredientId } from "@/lib/inventory";
 import {
+  displayToStock,
   etiquetaTipo,
   purchaseToStock,
+  stockToDisplay,
   tipoFromUnidad,
+  unidadFromTipo,
   type TipoEntrada,
 } from "@/lib/inventory-units";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 function parseDay(fecha: string) {
   return new Date(`${fecha}T12:00:00`);
+}
+
+async function convertRecipeQuantities(
+  tx: Prisma.TransactionClient,
+  ingredientId: string,
+  fromUnidad: "G" | "ML" | "UD",
+  tipoNuevo: TipoEntrada,
+) {
+  const toUnidad = unidadFromTipo(tipoNuevo);
+  if (fromUnidad === toUnidad) return;
+  const lines = await tx.recipeIngredient.findMany({ where: { ingredientId } });
+  for (const line of lines) {
+    const display = stockToDisplay(Number(line.cantidad), fromUnidad);
+    await tx.recipeIngredient.update({
+      where: {
+        recipeId_ingredientId: { recipeId: line.recipeId, ingredientId },
+      },
+      data: { cantidad: displayToStock(display, tipoNuevo) },
+    });
+  }
 }
 
 async function requireAdmin() {
@@ -86,6 +110,7 @@ const compraSchema = z.object({
   tipoEntrada: z.enum(["LIBRA", "LITRO", "UNIDAD"]),
   cantidadItems: z.coerce.number().positive(),
   contenidoPorItem: z.coerce.number().positive(),
+  stockMinimo: z.coerce.number().min(0),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   nota: z.string().max(200).optional(),
 });
@@ -122,18 +147,6 @@ export async function registrarCompraAction(raw: unknown) {
         ? await tx.ingredient.findUnique({ where: { id: data.ingredientId } })
         : null;
 
-      if (ingredient && ingredient.unidadMedida !== conv.unidadMedida) {
-        throw new Error(
-          `Este producto se registra en ${
-            ingredient.unidadMedida === "G"
-              ? "libras"
-              : ingredient.unidadMedida === "ML"
-                ? "litros"
-                : "unidades"
-          }`,
-        );
-      }
-
       let created = false;
       if (!ingredient) {
         const existingName = await tx.ingredient.findUnique({
@@ -148,7 +161,7 @@ export async function registrarCompraAction(raw: unknown) {
             nombre: nombreNuevo,
             unidadMedida: conv.unidadMedida,
             stockActual: 0,
-            stockMinimo: 0,
+            stockMinimo: displayToStock(data.stockMinimo, data.tipoEntrada),
           },
         });
         created = true;
@@ -156,10 +169,47 @@ export async function registrarCompraAction(raw: unknown) {
           data: {
             accion: "ALTA",
             nombre: ingredient.nombre,
-            detalle: `Producto nuevo · ${etiquetaUnidad}`,
+            detalle: `Producto nuevo · ${etiquetaUnidad} · mín. ${data.stockMinimo} ${etiquetaUnidad}`,
             userId: session.user.id,
           },
         });
+      } else {
+        const unidadAnterior = ingredient.unidadMedida;
+        if (unidadAnterior !== conv.unidadMedida) {
+          const stockConvertido = displayToStock(
+            stockToDisplay(Number(ingredient.stockActual), unidadAnterior),
+            data.tipoEntrada,
+          );
+          await convertRecipeQuantities(
+            tx,
+            ingredient.id,
+            unidadAnterior,
+            data.tipoEntrada,
+          );
+          await tx.inventoryAudit.create({
+            data: {
+              accion: "RENOMBRE",
+              nombre: ingredient.nombre,
+              detalle: `Volumen: ${etiquetaTipo(tipoFromUnidad(unidadAnterior))} → ${etiquetaUnidad}`,
+              userId: session.user.id,
+            },
+          });
+          await tx.ingredient.update({
+            where: { id: ingredient.id },
+            data: {
+              unidadMedida: conv.unidadMedida,
+              stockActual: stockConvertido,
+              stockMinimo: displayToStock(data.stockMinimo, data.tipoEntrada),
+            },
+          });
+        } else {
+          await tx.ingredient.update({
+            where: { id: ingredient.id },
+            data: {
+              stockMinimo: displayToStock(data.stockMinimo, data.tipoEntrada),
+            },
+          });
+        }
       }
 
       await tx.ingredient.update({
@@ -194,34 +244,67 @@ export async function registrarCompraAction(raw: unknown) {
 const renameSchema = z.object({
   id: z.string().min(1),
   nombre: z.string().min(1).max(80),
+  tipoEntrada: z.enum(["LIBRA", "LITRO", "UNIDAD"]),
+  stockMinimo: z.coerce.number().min(0),
 });
 
-export async function renombrarProductoAction(raw: unknown) {
+export async function guardarProductoAction(raw: unknown) {
   const session = await requireAdmin();
   if (!session) {
     return { ok: false as const, error: "No autorizado" };
   }
   const parsed = renameSchema.safeParse(raw);
   if (!parsed.success) {
-    return { ok: false as const, error: "Nombre inválido" };
+    return { ok: false as const, error: "Datos inválidos" };
   }
   const nombre = parsed.data.nombre.trim();
+  const tipoNuevo = parsed.data.tipoEntrada as TipoEntrada;
+  const unidadNueva = unidadFromTipo(tipoNuevo);
   try {
     const before = await prisma.ingredient.findUnique({
       where: { id: parsed.data.id },
     });
     if (!before) return { ok: false as const, error: "Producto no encontrado" };
-    if (before.nombre === nombre) return { ok: true as const };
+    const minimoInterno = displayToStock(parsed.data.stockMinimo, tipoNuevo);
+    const unidadCambia = before.unidadMedida !== unidadNueva;
+    const nombreCambia = before.nombre !== nombre;
+    const minimoCambia = Number(before.stockMinimo) !== minimoInterno;
+    if (!unidadCambia && !nombreCambia && !minimoCambia) {
+      return { ok: true as const };
+    }
     await prisma.$transaction(async (tx) => {
+      let stockActual = Number(before.stockActual);
+      if (unidadCambia) {
+        stockActual = displayToStock(
+          stockToDisplay(stockActual, before.unidadMedida),
+          tipoNuevo,
+        );
+        await convertRecipeQuantities(tx, before.id, before.unidadMedida, tipoNuevo);
+      }
       await tx.ingredient.update({
         where: { id: parsed.data.id },
-        data: { nombre },
+        data: {
+          nombre,
+          unidadMedida: unidadNueva,
+          stockMinimo: minimoInterno,
+          stockActual,
+        },
       });
+      const detalles: string[] = [];
+      if (nombreCambia) detalles.push(`Antes: ${before.nombre}`);
+      if (unidadCambia) {
+        detalles.push(
+          `Volumen: ${etiquetaTipo(tipoFromUnidad(before.unidadMedida))} → ${etiquetaTipo(tipoNuevo)}`,
+        );
+      }
+      if (minimoCambia) {
+        detalles.push(`Mínimo: ${parsed.data.stockMinimo} ${etiquetaTipo(tipoNuevo)}`);
+      }
       await tx.inventoryAudit.create({
         data: {
           accion: "RENOMBRE",
           nombre,
-          detalle: `Antes: ${before.nombre}`,
+          detalle: detalles.join(" · "),
           userId: session.user.id,
         },
       });
@@ -234,7 +317,7 @@ export async function renombrarProductoAction(raw: unknown) {
         ? "Ya existe un producto con ese nombre"
         : error instanceof Error
           ? error.message
-          : "No se pudo renombrar";
+          : "No se pudo guardar";
     return { ok: false as const, error: message };
   }
 }
@@ -266,27 +349,5 @@ export async function borrarProductoAction(raw: unknown) {
     const message = error instanceof Error ? error.message : "No se pudo borrar";
     return { ok: false as const, error: message };
   }
-}
-
-export async function resetearInventarioAction() {
-  const session = await requireAdmin();
-  if (!session) {
-    return { ok: false as const, error: "No autorizado" };
-  }
-  const count = await prisma.ingredient.count();
-  await prisma.$transaction(async (tx) => {
-    await tx.inventoryMovement.deleteMany();
-    await tx.ingredient.updateMany({ data: { stockActual: 0 } });
-    await tx.inventoryAudit.create({
-      data: {
-        accion: "RESET",
-        nombre: "Inventario",
-        detalle: `Stock de ${count} productos puesto en 0. Historial de movimientos reiniciado.`,
-        userId: session.user.id,
-      },
-    });
-  });
-  refresh();
-  return { ok: true as const, count };
 }
 
