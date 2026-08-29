@@ -181,9 +181,49 @@ export function displayToStock(
 
 /** Unidades visibles que coinciden con cómo se guarda el producto. */
 export function tiposAjusteParaUnidad(unidad: UnidadInterna): TipoEntrada[] {
-  if (unidad === "G") return ["LIBRA", "ONZA", "KILO", "OTRO"];
-  if (unidad === "ML") return ["LITRO", "OTRO"];
-  return ["ITEM", "UNIDAD", "OTRO"];
+  if (unidad === "G") return ["UNIDAD", "ITEM", "LIBRA", "ONZA", "KILO", "OTRO"];
+  if (unidad === "ML") return ["UNIDAD", "ITEM", "LITRO", "OTRO"];
+  return ["UNIDAD", "ITEM", "OTRO"];
+}
+
+export function tipoAjustePorDefecto(
+  unidad: UnidadInterna,
+  etiqueta?: string | null,
+): TipoEntrada {
+  if (unidad === "G" || unidad === "ML") return "UNIDAD";
+  return tipoFromIngredient(unidad, etiqueta);
+}
+
+/** Extrae el contenido por envase de una nota tipo "Compra 2026-08-29: 1 × 12 oz". */
+export function contenidoDesdeNota(nota?: string | null): number | null {
+  if (!nota) return null;
+  const m = nota.match(/×\s*(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n > 0 ? n : null;
+}
+
+export function resolverContenidoPorItem(
+  stored: number,
+  nota?: string | null,
+): number {
+  if (stored > 0 && stored !== 1) return stored;
+  const fromNote = contenidoDesdeNota(nota);
+  if (fromNote && fromNote > 0) return fromNote;
+  return stored > 0 ? stored : 1;
+}
+
+export function etiquetaEnvase(
+  contenido: number,
+  unidad: UnidadInterna,
+  etiqueta?: string | null,
+): string {
+  const r = resolveEntrada(tipoFromIngredient(unidad, etiqueta), etiqueta ?? "");
+  return `1 unidad = ${contenido} ${r.etiqueta}`;
+}
+
+function esAjustePorEnvase(tipo: TipoEntrada): boolean {
+  return tipo === "UNIDAD" || tipo === "ITEM";
 }
 
 function etiquetaFamilia(unidad: UnidadInterna): string {
@@ -198,10 +238,34 @@ export function ajusteToStock(params: {
   tipoEntrada: TipoEntrada;
   unidadCustom?: string;
   unidadProducto: UnidadInterna;
+  unidadEtiqueta?: string | null;
+  contenidoPorItem?: number;
 }): { unidadMedida: UnidadInterna; cantidadStock: number; etiqueta: string } {
   if (params.cantidad === 0) {
     throw new Error("La cantidad no puede ser 0");
   }
+  const contenido =
+    params.contenidoPorItem && params.contenidoPorItem > 0
+      ? params.contenidoPorItem
+      : 1;
+
+  if (esAjustePorEnvase(params.tipoEntrada)) {
+    const producto = resolveEntrada(
+      tipoFromIngredient(params.unidadProducto, params.unidadEtiqueta),
+      params.unidadEtiqueta ?? "",
+    );
+    const factor =
+      producto.unidadMedida === params.unidadProducto ? producto.factor : 1;
+    return {
+      unidadMedida: params.unidadProducto,
+      cantidadStock: Math.abs(params.cantidad) * contenido * factor,
+      etiqueta:
+        producto.unidadMedida === params.unidadProducto
+          ? producto.etiqueta
+          : params.unidadEtiqueta?.trim() || "ud",
+    };
+  }
+
   const r = resolveEntrada(params.tipoEntrada, params.unidadCustom);
   if (r.unidadMedida !== params.unidadProducto) {
     throw new Error(

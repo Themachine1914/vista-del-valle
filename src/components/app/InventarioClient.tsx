@@ -16,6 +16,7 @@ import {
   purchaseToStock,
   resolveEntrada,
   stockToDisplay,
+  tipoAjustePorDefecto,
   tipoFromIngredient,
   tipoMinimoDesdeEntrada,
   tiposAjusteParaUnidad,
@@ -36,6 +37,8 @@ type Row = {
   nombre: string;
   unidadMedida: "G" | "ML" | "UD";
   unidadEtiqueta: string;
+  contenidoPorItem: number;
+  envaseEtiqueta: string;
   stockActual: number;
   stockMinimo: number;
   bajo: boolean;
@@ -207,8 +210,8 @@ export function InventarioClient({
   const [ajusteTipo, setAjusteTipo] = useState<"ENTRADA" | "AJUSTE">("AJUSTE");
   const [ajusteTipoEntrada, setAjusteTipoEntrada] = useState<TipoEntrada>(
     rows[0]
-      ? tipoFromIngredient(rows[0].unidadMedida, rows[0].unidadEtiqueta)
-      : "LIBRA",
+      ? tipoAjustePorDefecto(rows[0].unidadMedida, rows[0].unidadEtiqueta)
+      : "UNIDAD",
   );
   const [ajusteUnidadCustom, setAjusteUnidadCustom] = useState(
     rows[0] ? customFromIngredient(rows[0].unidadMedida, rows[0].unidadEtiqueta) : "",
@@ -237,12 +240,13 @@ export function InventarioClient({
     setUnidadCustom(customFromIngredient(row.unidadMedida, row.unidadEtiqueta));
     setTipoMinimo(tipoMinimoDesdeEntrada(tipo));
     setStockMinimo(round3(stockToDisplay(row.stockMinimo, row.unidadMedida, row.unidadEtiqueta)));
+    setContenidoPorItem(row.contenidoPorItem);
   }, [modo, sel, rows]);
 
   useEffect(() => {
     const row = rows.find((r) => r.id === ajusteSel);
     if (!row) return;
-    setAjusteTipoEntrada(tipoFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+    setAjusteTipoEntrada(tipoAjustePorDefecto(row.unidadMedida, row.unidadEtiqueta));
     setAjusteUnidadCustom(customFromIngredient(row.unidadMedida, row.unidadEtiqueta));
   }, [ajusteSel, rows]);
 
@@ -295,6 +299,8 @@ export function InventarioClient({
         tipoEntrada: ajusteTipoEntrada,
         unidadCustom: ajusteUnidadCustom,
         unidadProducto: ajusteRow.unidadMedida,
+        unidadEtiqueta: ajusteRow.unidadEtiqueta,
+        contenidoPorItem: ajusteRow.contenidoPorItem,
       });
       const signed =
         ajusteTipo === "ENTRADA"
@@ -343,7 +349,7 @@ export function InventarioClient({
         : `Compra de "${res.nombre}" registrada`,
     );
     setCantidadItems(1);
-    setContenidoPorItem(1);
+    setContenidoPorItem(modo === "existente" ? (rows.find((r) => r.id === sel)?.contenidoPorItem ?? contenidoPorItem) : 1);
     setPrecioTotal("");
     setNota("");
     setNombreNuevo("");
@@ -482,21 +488,28 @@ export function InventarioClient({
               <option value="nuevo">Producto nuevo</option>
             </select>
             {modo === "existente" ? (
-              <select
-                value={sel}
-                onChange={(e) => setSel(e.target.value)}
-                className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-1 lg:col-span-3"
-              >
-                {productosForm.length === 0 ? (
-                  <option value="">No hay productos</option>
-                ) : (
-                  productosForm.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.nombre}
-                    </option>
-                  ))
-                )}
-              </select>
+              <label className="text-sm sm:col-span-1 lg:col-span-3">
+                <select
+                  value={sel}
+                  onChange={(e) => setSel(e.target.value)}
+                  className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+                >
+                  {productosForm.length === 0 ? (
+                    <option value="">No hay productos</option>
+                  ) : (
+                    productosForm.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nombre}
+                      </option>
+                    ))
+                  )}
+                </select>
+                {rows.find((r) => r.id === sel)?.envaseEtiqueta ? (
+                  <span className="mt-1 block text-xs text-fa-muted">
+                    Envase registrado: {rows.find((r) => r.id === sel)?.envaseEtiqueta}
+                  </span>
+                ) : null}
+              </label>
             ) : (
               <input
                 value={nombreNuevo}
@@ -569,7 +582,7 @@ export function InventarioClient({
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-fa-muted">
-                Contenido por ítem ({unidadEtiqueta})
+                Contenido por unidad ({unidadEtiqueta})
               </span>
               <input
                 type="number"
@@ -684,7 +697,9 @@ export function InventarioClient({
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-fa-muted">
-                Cantidad ({ajusteUnidadEtiqueta})
+                {ajusteTipoEntrada === "UNIDAD" || ajusteTipoEntrada === "ITEM"
+                  ? `Unidades${ajusteRow ? ` · ${ajusteRow.envaseEtiqueta}` : ""}`
+                  : `Cantidad (${ajusteUnidadEtiqueta})`}
               </span>
               <input
                 type="number"
@@ -692,7 +707,11 @@ export function InventarioClient({
                 value={ajusteCantidad}
                 onChange={(e) => setAjusteCantidad(Number(e.target.value))}
                 className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
-                placeholder={ajusteUnidadEtiqueta}
+                placeholder={
+                  ajusteTipoEntrada === "UNIDAD" || ajusteTipoEntrada === "ITEM"
+                    ? "Ej. 1 envase"
+                    : ajusteUnidadEtiqueta
+                }
               />
             </label>
             <label className="text-sm sm:col-span-2">
@@ -723,7 +742,10 @@ export function InventarioClient({
               className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-2 lg:col-span-4"
             />
             <p className="text-xs text-fa-muted sm:col-span-2 lg:col-span-4">
-              Elige la misma unidad con la que ingresaste el producto
+              {ajusteRow
+                ? `Por defecto ${ajusteRow.envaseEtiqueta}. `
+                : ""}
+              Unidad suma el envase; onza, libra o litro ajusta ese peso o volumen
               {ajusteTipo === "AJUSTE" ? " (negativo para restar)" : ""}.
               {ajustePreview
                 ? ` Se ${ajusteTipo === "ENTRADA" || ajusteCantidad > 0 ? "suman" : "restan"} ${ajustePreview}.`
@@ -832,6 +854,9 @@ export function InventarioClient({
                   ) : (
                     r.nombre
                   )}
+                  <span className="mt-1 block text-xs font-normal text-fa-muted">
+                    {r.envaseEtiqueta}
+                  </span>
                 </td>
                 <td className="px-3 py-2">
                   {r.precioEtiqueta !== "—" ? (

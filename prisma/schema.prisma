@@ -82,14 +82,15 @@ model Dish {
 }
 
 model Ingredient {
-  id             String               @id
-  nombre         String               @unique
-  unidadMedida   UnidadMedida
-  unidadEtiqueta String               @default("")
-  stockActual    Decimal
-  stockMinimo    Decimal
-  recipeItems    RecipeIngredient[]
-  movements      InventoryMovement[]
+  id               String               @id
+  nombre           String               @unique
+  unidadMedida     UnidadMedida
+  unidadEtiqueta   String               @default("")
+  contenidoPorItem Decimal              @default(1)
+  stockActual      Decimal
+  stockMinimo      Decimal
+  recipeItems      RecipeIngredient[]
+  movements        InventoryMovement[]
 }
 
 model Recipe {

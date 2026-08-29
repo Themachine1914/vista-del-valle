@@ -12,6 +12,10 @@ import {
   valorAlPrecio,
   type MovimientoPrecio,
 } from "@/lib/inventory-precio";
+import {
+  etiquetaEnvase,
+  resolverContenidoPorItem,
+} from "@/lib/inventory-units";
 
 export const dynamic = "force-dynamic";
 
@@ -76,10 +80,20 @@ export default async function InventarioPage({
     unidadEtiqueta: m.ingredient.unidadEtiqueta,
   }));
   const ultimas = ultimasComprasPorProducto(historial);
+  const ultimaNotaPorId = new Map<string, string>();
+  for (const m of entradas) {
+    if (m.nota && !ultimaNotaPorId.has(m.ingredientId)) {
+      ultimaNotaPorId.set(m.ingredientId, m.nota);
+    }
+  }
   const rows = ingredients.map((i) => {
     const consumo = consumoPorId[i.id] ?? 0;
     const ultima = ultimas[i.id];
     const stockNum = toMoney(i.stockActual);
+    const contenidoPorItem = resolverContenidoPorItem(
+      toMoney(i.contenidoPorItem),
+      ultimaNotaPorId.get(i.id),
+    );
     const valorStock = ultima
       ? valorAlPrecio(stockNum, ultima.unitario, i.unidadMedida, i.unidadEtiqueta)
       : null;
@@ -91,6 +105,8 @@ export default async function InventarioPage({
       nombre: i.nombre,
       unidadMedida: i.unidadMedida,
       unidadEtiqueta: i.unidadEtiqueta,
+      contenidoPorItem,
+      envaseEtiqueta: etiquetaEnvase(contenidoPorItem, i.unidadMedida, i.unidadEtiqueta),
       stockActual: stockNum,
       stockMinimo: toMoney(i.stockMinimo),
       bajo: stockNum < toMoney(i.stockMinimo),

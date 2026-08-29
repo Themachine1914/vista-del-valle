@@ -3,9 +3,11 @@ import { computeDeductionQty } from "./inventory";
 import { GRAMS_PER_LB, GRAMS_PER_OZ } from "./money";
 import {
   ajusteToStock,
+  contenidoDesdeNota,
   displayToStock,
   minimoToStock,
   purchaseToStock,
+  resolverContenidoPorItem,
   stockToDisplay,
   tipoFromIngredient,
   tiposAjusteParaUnidad,
@@ -223,6 +225,29 @@ describe("ajusteToStock", () => {
     expect(r).toMatchObject({ unidadMedida: "UD", cantidadStock: 6, etiqueta: "ud" });
   });
 
+  it("adds one mustard bottle using the registered ounces", () => {
+    const r = ajusteToStock({
+      cantidad: 1,
+      tipoEntrada: "UNIDAD",
+      unidadProducto: "G",
+      unidadEtiqueta: "oz",
+      contenidoPorItem: 12,
+    });
+    expect(r.cantidadStock).toBeCloseTo(12 * GRAMS_PER_OZ, 5);
+    expect(r.etiqueta).toBe("oz");
+  });
+
+  it("adds two registered packages", () => {
+    const r = ajusteToStock({
+      cantidad: 2,
+      tipoEntrada: "UNIDAD",
+      unidadProducto: "G",
+      unidadEtiqueta: "oz",
+      contenidoPorItem: 12,
+    });
+    expect(r.cantidadStock).toBeCloseTo(24 * GRAMS_PER_OZ, 5);
+  });
+
   it("rejects liters on a weight product", () => {
     expect(() =>
       ajusteToStock({
@@ -244,12 +269,33 @@ describe("ajusteToStock", () => {
 });
 
 describe("tiposAjusteParaUnidad", () => {
-  it("offers weight units for gram products", () => {
-    expect(tiposAjusteParaUnidad("G")).toEqual(["LIBRA", "ONZA", "KILO", "OTRO"]);
+  it("offers packages first, then weight units, for gram products", () => {
+    expect(tiposAjusteParaUnidad("G")).toEqual([
+      "UNIDAD",
+      "ITEM",
+      "LIBRA",
+      "ONZA",
+      "KILO",
+      "OTRO",
+    ]);
   });
 
   it("offers count units for unit products", () => {
-    expect(tiposAjusteParaUnidad("UD")).toEqual(["ITEM", "UNIDAD", "OTRO"]);
+    expect(tiposAjusteParaUnidad("UD")).toEqual(["UNIDAD", "ITEM", "OTRO"]);
+  });
+});
+
+describe("contenidoDesdeNota", () => {
+  it("reads the package size from a purchase note", () => {
+    expect(contenidoDesdeNota("Compra 2026-08-29: 1 × 12 oz")).toBe(12);
+  });
+
+  it("prefers a stored package size over a leftover 1", () => {
+    expect(resolverContenidoPorItem(34, "Compra 2026-08-01: 1 × 12 oz")).toBe(34);
+  });
+
+  it("fills in the package size from the last note when stock is still 1", () => {
+    expect(resolverContenidoPorItem(1, "Compra 2026-08-29: 2 × 12 oz")).toBe(12);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   minimoToStock,
   purchaseToStock,
   resolveEntrada,
+  resolverContenidoPorItem,
   stockToDisplay,
   tipoFromUnidad,
   type TipoEntrada,
@@ -88,11 +89,21 @@ export async function ajustarInventarioAction(raw: unknown) {
     if (!ingredient) {
       return { ok: false as const, error: "Producto no encontrado" };
     }
+    const ultimaCompra = await prisma.inventoryMovement.findFirst({
+      where: { ingredientId: ingredient.id, tipo: "ENTRADA" },
+      orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
+      select: { nota: true },
+    });
     const conv = ajusteToStock({
       cantidad: parsed.data.cantidad,
       tipoEntrada: parsed.data.tipoEntrada as TipoEntrada,
       unidadCustom: parsed.data.unidadCustom,
       unidadProducto: ingredient.unidadMedida,
+      unidadEtiqueta: ingredient.unidadEtiqueta,
+      contenidoPorItem: resolverContenidoPorItem(
+        Number(ingredient.contenidoPorItem),
+        ultimaCompra?.nota,
+      ),
     });
     const signed =
       parsed.data.tipo === "ENTRADA"
@@ -183,6 +194,7 @@ export async function registrarCompraAction(raw: unknown) {
             nombre: nombreNuevo,
             unidadMedida: conv.unidadMedida,
             unidadEtiqueta: etiquetaUnidad,
+            contenidoPorItem: data.contenidoPorItem,
             stockActual: 0,
             stockMinimo: minimoInterno,
           },
@@ -232,6 +244,7 @@ export async function registrarCompraAction(raw: unknown) {
             data: {
               unidadMedida: conv.unidadMedida,
               unidadEtiqueta: etiquetaUnidad,
+              contenidoPorItem: data.contenidoPorItem,
               stockActual: stockConvertido,
               stockMinimo: minimoInterno,
             },
@@ -251,6 +264,7 @@ export async function registrarCompraAction(raw: unknown) {
             where: { id: ingredient.id },
             data: {
               unidadEtiqueta: etiquetaUnidad,
+              contenidoPorItem: data.contenidoPorItem,
               stockMinimo: minimoInterno,
             },
           });
