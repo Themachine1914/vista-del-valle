@@ -25,12 +25,15 @@ export type RegistroPdfStock = {
   stock: string;
   minimo: string;
   consumo: string;
+  precio?: string;
+  valor?: string;
 };
 
 export type RegistroPdfConsumo = {
   producto: string;
   consumo: string;
   stock: string;
+  costo?: string;
 };
 
 const ACCION: Record<string, string> = {
@@ -59,6 +62,9 @@ export function buildInventarioRegistroPdf(input: {
   consumo?: RegistroPdfConsumo[];
   generadoPor: string;
   periodoLabel?: string;
+  totalCompras?: string;
+  totalConsumo?: string;
+  totalStock?: string;
 }): ArrayBuffer {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const fecha = formatFechaCorta(new Date());
@@ -79,9 +85,16 @@ export function buildInventarioRegistroPdf(input: {
     14,
     31,
   );
+  if (input.totalCompras || input.totalConsumo || input.totalStock) {
+    doc.text(
+      `Compras ${input.totalCompras ?? "—"}  ·  Consumo ${input.totalConsumo ?? "—"}  ·  Stock ${input.totalStock ?? "—"}`,
+      14,
+      35,
+    );
+  }
 
   autoTable(doc, {
-    startY: 38,
+    startY: input.totalCompras || input.totalConsumo || input.totalStock ? 42 : 38,
     head: [["Cuándo", "Acción", "Producto", "Detalle", "Usuario"]],
     body:
       input.audits.length === 0
@@ -145,11 +158,11 @@ export function buildInventarioRegistroPdf(input: {
 
   autoTable(doc, {
     startY: tableStartY(doc),
-    head: [["Producto", "Consumido", "Stock actual"]],
+    head: [["Producto", "Consumido", "Precio total", "Stock actual"]],
     body:
       consumo.length === 0
-        ? [["—", "Sin consumo", "—"]]
-        : consumo.map((c) => [c.producto, c.consumo, c.stock]),
+        ? [["—", "Sin consumo", "—", "—"]]
+        : consumo.map((c) => [c.producto, c.consumo, c.costo ?? "—", c.stock]),
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.6, textColor: [15, 23, 42] },
     headStyles: { fillColor: PRIMARY, textColor: HEAD_TEXT, fontStyle: "bold" },
@@ -163,8 +176,15 @@ export function buildInventarioRegistroPdf(input: {
 
   autoTable(doc, {
     startY: tableStartY(doc),
-    head: [["Producto", "Stock", "Mínimo", "Consumo"]],
-    body: input.stock.map((s) => [s.nombre, s.stock, s.minimo, s.consumo]),
+    head: [["Producto", "Stock", "Mínimo", "Consumo", "Precio", "Valor"]],
+    body: input.stock.map((s) => [
+      s.nombre,
+      s.stock,
+      s.minimo,
+      s.consumo,
+      s.precio ?? "—",
+      s.valor ?? "—",
+    ]),
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.6, textColor: [15, 23, 42] },
     headStyles: { fillColor: PRIMARY, textColor: HEAD_TEXT, fontStyle: "bold" },

@@ -5,8 +5,13 @@ import {
   registroPdfFilename,
 } from "@/lib/inventory-registro-pdf";
 import { sumarConsumo } from "@/lib/inventory-consumo";
-import { etiquetaPrecioCompra } from "@/lib/inventory-precio";
-import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
+import {
+  etiquetaPrecioCompra,
+  ultimasComprasPorProducto,
+  valorAlPrecio,
+  type MovimientoPrecio,
+} from "@/lib/inventory-precio";
+import { formatFechaCorta, formatRD, formatRDUnitario, formatStockCompra, toMoney } from "@/lib/money";
 import { parsePeriodo } from "@/lib/period";
 import { NextResponse } from "next/server";
 
@@ -22,7 +27,7 @@ export async function GET(request: Request) {
   const periodo = parsePeriodo(sp);
   const range = { gte: periodo.gte, lt: periodo.lt };
 
-  const [audits, compras, stock, ventas] = await Promise.all([
+  const [audits, compras, stock, ventas, entradas] = await Promise.all([
     prisma.inventoryAudit.findMany({
       where: { createdAt: range },
       orderBy: { createdAt: "desc" },
@@ -39,9 +44,29 @@ export async function GET(request: Request) {
     prisma.ingredient.findMany({ orderBy: { nombre: "asc" } }),
     prisma.inventoryMovement.findMany({
       where: { tipo: "VENTA", fecha: range },
-      select: { ingredientId: true, cantidad: true },
+      include: {
+        ingredient: { select: { unidadMedida: true, unidadEtiqueta: true } },
+      },
+    }),
+    prisma.inventoryMovement.findMany({
+      where: { tipo: "ENTRADA" },
+      orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
+      include: {
+        ingredient: { select: { unidadMedida: true, unidadEtiqueta: true } },
+      },
     }),
   ]);
+  const historial: MovimientoPrecio[] = entradas.map((m) => ({
+    id: m.id,
+    ingredientId: m.ingredientId,
+    cantidad: toMoney(m.cantidad),
+    precioTotal: m.precioTotal == null ? null : toMoney(m.precioTotal),
+    fecha: m.fecha,
+    createdAt: m.createdAt,
+    unidadMedida: m.ingredient.unidadMedida,
+    unidadEtiqueta: m.ingredient.unidadEtiqueta,
+  }));
+  const ultimas = ultimasComprasPorProducto(historial);
   const consumoPorId = sumarConsumo(
     ventas.map((m) => ({
       ingredientId: m.ingredientId,
@@ -82,6 +107,15 @@ export async function GET(request: Request) {
     }),
     stock: stock.map((i) => {
       const consumo = consumoPorId[i.id] ?? 0;
+      const ultima = ultimas[i.id];
+      const valor = ultima
+        ? valorAlPrecio(
+            toMoney(i.stockActual),
+            ultima.unitario,
+            i.unidadMedida,
+            i.unidadEtiqueta,
+          )
+        : null;
       return {
         nombre: i.nombre,
         stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
@@ -90,20 +124,70 @@ export async function GET(request: Request) {
           consumo > 0
             ? formatStockCompra(consumo, i.unidadMedida, i.unidadEtiqueta)
             : "—",
+        precio: ultima
+          ? `${formatRDUnitario(ultima.unitario)} / ${ultima.etiquetaUnidad}`
+          : "—",
+        valor: valor == null ? "—" : formatRD(valor),
       };
     }),
     consumo: stock
       .filter((i) => (consumoPorId[i.id] ?? 0) > 0)
       .sort((a, b) => (consumoPorId[b.id] ?? 0) - (consumoPorId[a.id] ?? 0))
-      .map((i) => ({
-        producto: i.nombre,
-        consumo: formatStockCompra(
-          consumoPorId[i.id] ?? 0,
-          i.unidadMedida,
-          i.unidadEtiqueta,
-        ),
-        stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
-      })),
+      .map((i) => {
+        const ultima = ultimas[i.id];
+        const costo = ultima
+          ? valorAlPrecio(
+              consumoPorId[i.id] ?? 0,
+              ultima.unitario,
+              i.unidadMedida,
+              i.unidadEtiqueta,
+            )
+          : null;
+        return {
+          producto: i.nombre,
+          consumo: formatStockCompra(
+            consumoPorId[i.id] ?? 0,
+            i.unidadMedida,
+            i.unidadEtiqueta,
+          ),
+          stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
+          costo: costo == null ? "—" : formatRD(costo),
+        };
+      }),
+    totalCompras: formatRD(
+      compras.reduce((acc, m) => {
+        const p = m.precioTotal == null ? 0 : toMoney(m.precioTotal);
+        return acc + (p > 0 ? p : 0);
+      }, 0),
+    ),
+    totalConsumo: formatRD(
+      ventas.reduce((acc, m) => {
+        const ultima = ultimas[m.ingredientId];
+        const v = ultima
+          ? valorAlPrecio(
+              toMoney(m.cantidad),
+              ultima.unitario,
+              m.ingredient.unidadMedida,
+              m.ingredient.unidadEtiqueta,
+            )
+          : null;
+        return acc + (v ?? 0);
+      }, 0),
+    ),
+    totalStock: formatRD(
+      stock.reduce((acc, i) => {
+        const ultima = ultimas[i.id];
+        const v = ultima
+          ? valorAlPrecio(
+              toMoney(i.stockActual),
+              ultima.unitario,
+              i.unidadMedida,
+              i.unidadEtiqueta,
+            )
+          : null;
+        return acc + (v ?? 0);
+      }, 0),
+    ),
   });
 
   return new NextResponse(Buffer.from(bytes), {

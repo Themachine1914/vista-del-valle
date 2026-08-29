@@ -1,4 +1,4 @@
-import { precioPorUnidad, type UnidadInterna } from "./inventory-units";
+import { precioPorUnidad, stockToDisplay, type UnidadInterna } from "./inventory-units";
 import { formatFechaCorta, formatRD, formatRDUnitario } from "./money";
 
 export type MovimientoPrecio = {
@@ -65,6 +65,19 @@ export function ultimasComprasPorProducto(
     };
   }
   return out;
+}
+
+/** Precio total de una cantidad interna usando el precio por unidad visible. */
+export function valorAlPrecio(
+  cantidadInterna: number,
+  unitario: number | null | undefined,
+  unidad: UnidadInterna,
+  etiqueta?: string | null,
+): number | null {
+  if (unitario == null || !(unitario > 0)) return null;
+  const display = stockToDisplay(Math.abs(cantidadInterna), unidad, etiqueta);
+  if (!(display > 0)) return null;
+  return display * unitario;
 }
 
 export function comparacionVsAnterior(

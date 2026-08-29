@@ -14,7 +14,7 @@ export function LoginForm() {
     setPending(true);
     setError(false);
     const res = await signIn("credentials", {
-      email: String(formData.get("email") ?? ""),
+      email: String(formData.get("email") ?? "").trim().toLowerCase(),
       password: String(formData.get("password") ?? ""),
       redirect: false,
     });
@@ -36,7 +36,8 @@ export function LoginForm() {
           name="email"
           type="email"
           required
-          defaultValue="camarero@vistadelvalle.local"
+          placeholder="admin@vistadelvalle.local"
+          autoComplete="username"
           className="mt-1 w-full rounded-[10px] border border-fa-border px-3 py-2"
         />
       </label>

@@ -41,6 +41,9 @@ type Row = {
   minimoEtiqueta: string;
   consumo: number;
   consumoEtiqueta: string;
+  precioEtiqueta: string;
+  valorStockEtiqueta: string;
+  costoConsumoEtiqueta: string;
 };
 
 type AuditRow = {
@@ -50,6 +53,23 @@ type AuditRow = {
   detalle: string | null;
   usuario: string;
   createdAt: string;
+};
+
+type MovimientoRow = {
+  id: string;
+  fecha: string;
+  tipo: "ENTRADA" | "VENTA" | "AJUSTE";
+  producto: string;
+  etiqueta: string;
+  precio: string;
+  nota: string | null;
+  usuario: string;
+};
+
+const TIPO_MOV: Record<MovimientoRow["tipo"], string> = {
+  ENTRADA: "Compra",
+  VENTA: "Consumo",
+  AJUSTE: "Ajuste",
 };
 
 type CompraRow = {
@@ -133,6 +153,7 @@ export function InventarioClient({
   canAdjust,
   audits,
   compras,
+  movimientos,
   ultimas,
   defaultFecha,
   periodo,
@@ -142,6 +163,7 @@ export function InventarioClient({
   canAdjust: boolean;
   audits: AuditRow[];
   compras: CompraRow[];
+  movimientos: MovimientoRow[];
   ultimas: Record<string, UltimaCompra>;
   defaultFecha: string;
   periodo: PeriodoFiltro;
@@ -151,6 +173,9 @@ export function InventarioClient({
     cambios: number;
     compras: number;
     consumo: number;
+    valorCompras: string;
+    valorConsumo: string;
+    valorStock: string;
   };
 }) {
   const router = useRouter();
@@ -233,6 +258,9 @@ export function InventarioClient({
     .sort((a, b) => b.consumo - a.consumo);
   const productosForm = rows.filter((r) => coincideBusqueda(r.nombre, q));
   const comprasVisibles = compras.filter((c) => coincideBusqueda(c.producto, q));
+  const movimientosVisibles = movimientos.filter((m) =>
+    coincideBusqueda(m.producto, q),
+  );
 
   const ajusteRow = rows.find((r) => r.id === ajusteSel);
 
@@ -363,9 +391,10 @@ export function InventarioClient({
 
       <PeriodFilter basePath="/inventario" periodo={periodo} />
       <p className="text-sm text-fa-muted">
-        {periodo.label}: {resumen.consumo} productos consumidos · {resumen.compras}{" "}
-        compras · {resumen.altas} altas · {resumen.bajas} bajas · {resumen.cambios}{" "}
-        cambios
+        {periodo.label}: compras {resumen.valorCompras} · consumo {resumen.valorConsumo}{" "}
+        · stock {resumen.valorStock} · {resumen.consumo} productos consumidos ·{" "}
+        {resumen.compras} compras · {resumen.altas} altas · {resumen.bajas} bajas ·{" "}
+        {resumen.cambios} cambios
       </p>
 
       <label className="block w-full max-w-xl">
@@ -649,6 +678,7 @@ export function InventarioClient({
             <tr>
               <th className="px-3 py-2">Producto</th>
               <th className="px-3 py-2">Consumido</th>
+              <th className="px-3 py-2">Precio total</th>
               <th className="px-3 py-2">Stock actual</th>
             </tr>
           </thead>
@@ -657,18 +687,27 @@ export function InventarioClient({
               <tr key={r.id} className="border-t border-fa-border">
                 <td className="px-3 py-2 font-medium">{r.nombre}</td>
                 <td className="px-3 py-2">{r.consumoEtiqueta}</td>
+                <td className="px-3 py-2">{r.costoConsumoEtiqueta}</td>
                 <td className="px-3 py-2 text-fa-muted">{r.etiqueta}</td>
               </tr>
             ))}
             {consumidos.length === 0 ? (
               <tr>
-                <td className="px-3 py-4 text-fa-muted" colSpan={3}>
+                <td className="px-3 py-4 text-fa-muted" colSpan={4}>
                   {q.trim()
                     ? "Ningún producto de la búsqueda se consumió en este periodo."
                     : "Aún no hay consumo de ventas en este periodo."}
                 </td>
               </tr>
-            ) : null}
+            ) : (
+              <tr className="border-t border-fa-border bg-fa-bg font-medium">
+                <td className="px-3 py-2" colSpan={2}>
+                  Total consumo · {periodo.label}
+                </td>
+                <td className="px-3 py-2">{resumen.valorConsumo}</td>
+                <td className="px-3 py-2" />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -696,6 +735,7 @@ export function InventarioClient({
           <thead className="bg-fa-bg text-fa-muted">
             <tr>
               <th className="px-3 py-2">Producto</th>
+              <th className="px-3 py-2">Precio</th>
               <th className="px-3 py-2">Stock</th>
               <th className="px-3 py-2">Consumo · {periodo.label}</th>
               <th className="px-3 py-2">Entrada</th>
@@ -704,7 +744,9 @@ export function InventarioClient({
             </tr>
           </thead>
           <tbody>
-            {visible.map((r) => (
+            {visible.map((r) => {
+              const ultima = ultimas[r.id];
+              return (
               <tr
                 key={r.id}
                 className={r.bajo ? "bg-red-50 text-red-900" : "border-t border-fa-border"}
@@ -720,6 +762,19 @@ export function InventarioClient({
                     />
                   ) : (
                     r.nombre
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  {r.precioEtiqueta !== "—" ? (
+                    <>
+                      <span className="font-medium">{r.precioEtiqueta}</span>
+                      <span className="block text-xs text-fa-muted">
+                        Total stock {r.valorStockEtiqueta}
+                        {ultima ? ` · ${ultima.fecha}` : ""}
+                      </span>
+                    </>
+                  ) : (
+                    "—"
                   )}
                 </td>
                 <td className="px-3 py-2">{r.etiqueta}</td>
@@ -802,11 +857,58 @@ export function InventarioClient({
                   </td>
                 ) : null}
               </tr>
-            ))}
+              );
+            })}
             {visible.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-fa-muted" colSpan={canAdjust ? 6 : 5}>
+                <td className="px-3 py-6 text-fa-muted" colSpan={canAdjust ? 7 : 6}>
                   {q.trim() ? "Ningún producto coincide con la búsqueda." : "No hay productos."}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
+        <h2 className="border-b border-fa-border px-3 py-2 text-sm font-semibold text-fa-primary">
+          Movimientos · {periodo.label}
+          {q.trim()
+            ? ` · ${movimientosVisibles.length} resultado${movimientosVisibles.length === 1 ? "" : "s"}`
+            : ""}
+        </h2>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-fa-bg text-fa-muted">
+            <tr>
+              <th className="px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Tipo</th>
+              <th className="px-3 py-2">Producto</th>
+              <th className="px-3 py-2">Cantidad</th>
+              <th className="px-3 py-2">Precio total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movimientosVisibles.map((m) => (
+              <tr key={m.id} className="border-t border-fa-border">
+                <td className="px-3 py-2 text-fa-muted">{m.fecha}</td>
+                <td className="px-3 py-2">{TIPO_MOV[m.tipo]}</td>
+                <td className="px-3 py-2">
+                  <span className="font-medium">{m.producto}</span>
+                  {m.nota ? (
+                    <span className="block text-xs text-fa-muted">{m.nota}</span>
+                  ) : null}
+                  <span className="block text-xs text-fa-muted">{m.usuario}</span>
+                </td>
+                <td className="px-3 py-2">{m.etiqueta}</td>
+                <td className="px-3 py-2">{m.precio}</td>
+              </tr>
+            ))}
+            {movimientosVisibles.length === 0 ? (
+              <tr>
+                <td className="px-3 py-4 text-fa-muted" colSpan={5}>
+                  {q.trim()
+                    ? "Ningún movimiento coincide con la búsqueda."
+                    : "Aún no hay movimientos en este periodo."}
                 </td>
               </tr>
             ) : null}
@@ -907,7 +1009,15 @@ export function InventarioClient({
                       : "Aún no hay compras."}
                   </td>
                 </tr>
-              ) : null}
+              ) : (
+                <tr className="border-t border-fa-border bg-fa-bg font-medium">
+                  <td className="px-3 py-2" colSpan={3}>
+                    Total compras · {periodo.label}
+                  </td>
+                  <td className="px-3 py-2">{resumen.valorCompras}</td>
+                  <td className="px-3 py-2" />
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

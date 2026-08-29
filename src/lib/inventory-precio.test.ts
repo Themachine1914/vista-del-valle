@@ -5,6 +5,7 @@ import {
   comparacionVsAnterior,
   etiquetaPrecioCompra,
   ultimasComprasPorProducto,
+  valorAlPrecio,
   type MovimientoPrecio,
 } from "./inventory-precio";
 
@@ -67,6 +68,20 @@ describe("ultimasComprasPorProducto", () => {
     ]);
     expect(ultimas.arroz.precioTotal).toBe(1300);
     expect(ultimas.aceite.precioTotal).toBe(500);
+  });
+});
+
+describe("valorAlPrecio", () => {
+  it("multiplies visible stock by the last unit price", () => {
+    expect(valorAlPrecio(50 * GRAMS_PER_LB, 24, "G", "lb")).toBeCloseTo(1200, 5);
+  });
+
+  it("values consumed quantity the same way", () => {
+    expect(valorAlPrecio(8 * GRAMS_PER_LB, 24, "G", "lb")).toBeCloseTo(192, 5);
+  });
+
+  it("returns null without a unit price", () => {
+    expect(valorAlPrecio(50 * GRAMS_PER_LB, null, "G", "lb")).toBeNull();
   });
 });
 
