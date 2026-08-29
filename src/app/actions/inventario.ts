@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { adjustStock, slugIngredientId } from "@/lib/inventory";
 import {
-  customFromIngredient,
+  ajusteToStock,
   displayToStock,
   etiquetaMinimo,
   etiquetaTipo,
@@ -12,7 +12,6 @@ import {
   purchaseToStock,
   resolveEntrada,
   stockToDisplay,
-  tipoFromIngredient,
   tipoFromUnidad,
   type TipoEntrada,
   type TipoMinimo,
@@ -64,6 +63,8 @@ function refresh() {
 const ajusteSchema = z.object({
   ingredientId: z.string().min(1),
   tipo: z.enum(["ENTRADA", "AJUSTE"]),
+  tipoEntrada: z.enum(["LIBRA", "ONZA", "KILO", "LITRO", "ITEM", "UNIDAD", "OTRO"]),
+  unidadCustom: z.string().max(24).optional(),
   cantidad: z.coerce.number(),
   nota: z.string().max(200).optional(),
 });
@@ -87,11 +88,11 @@ export async function ajustarInventarioAction(raw: unknown) {
     if (!ingredient) {
       return { ok: false as const, error: "Producto no encontrado" };
     }
-    const conv = purchaseToStock({
-      tipoEntrada: tipoFromIngredient(ingredient.unidadMedida, ingredient.unidadEtiqueta),
-      unidadCustom: customFromIngredient(ingredient.unidadMedida, ingredient.unidadEtiqueta),
-      cantidadItems: 1,
-      contenidoPorItem: Math.abs(parsed.data.cantidad),
+    const conv = ajusteToStock({
+      cantidad: parsed.data.cantidad,
+      tipoEntrada: parsed.data.tipoEntrada as TipoEntrada,
+      unidadCustom: parsed.data.unidadCustom,
+      unidadProducto: ingredient.unidadMedida,
     });
     const signed =
       parsed.data.tipo === "ENTRADA"

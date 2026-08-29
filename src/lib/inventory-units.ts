@@ -179,6 +179,42 @@ export function displayToStock(
   }).cantidadStock;
 }
 
+/** Unidades visibles que coinciden con cómo se guarda el producto. */
+export function tiposAjusteParaUnidad(unidad: UnidadInterna): TipoEntrada[] {
+  if (unidad === "G") return ["LIBRA", "ONZA", "KILO", "OTRO"];
+  if (unidad === "ML") return ["LITRO", "OTRO"];
+  return ["ITEM", "UNIDAD", "OTRO"];
+}
+
+function etiquetaFamilia(unidad: UnidadInterna): string {
+  if (unidad === "G") return "peso (libra, onza o kilo)";
+  if (unidad === "ML") return "volumen (litro)";
+  return "unidades o ítems";
+}
+
+/** Convierte un ajuste (cantidad + unidad elegida) a stock interno. */
+export function ajusteToStock(params: {
+  cantidad: number;
+  tipoEntrada: TipoEntrada;
+  unidadCustom?: string;
+  unidadProducto: UnidadInterna;
+}): { unidadMedida: UnidadInterna; cantidadStock: number; etiqueta: string } {
+  if (params.cantidad === 0) {
+    throw new Error("La cantidad no puede ser 0");
+  }
+  const r = resolveEntrada(params.tipoEntrada, params.unidadCustom);
+  if (r.unidadMedida !== params.unidadProducto) {
+    throw new Error(
+      `Este producto se ajusta por ${etiquetaFamilia(params.unidadProducto)}, no en ${r.etiqueta}`,
+    );
+  }
+  return {
+    unidadMedida: r.unidadMedida,
+    cantidadStock: Math.abs(params.cantidad) * r.factor,
+    etiqueta: r.etiqueta,
+  };
+}
+
 export function tipoMinimoDesdeEntrada(tipo: TipoEntrada): TipoMinimo {
   if (tipo === "ONZA") return "ONZA";
   if (tipo === "LIBRA" || tipo === "KILO") return "LIBRA";

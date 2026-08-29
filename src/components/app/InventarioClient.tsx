@@ -9,6 +9,7 @@ import {
 import { PeriodFilter } from "@/components/app/PeriodFilter";
 import { PdfDownload } from "@/components/app/PdfDownload";
 import {
+  ajusteToStock,
   customFromIngredient,
   etiquetaMinimo,
   etiquetaTipo,
@@ -17,6 +18,7 @@ import {
   stockToDisplay,
   tipoFromIngredient,
   tipoMinimoDesdeEntrada,
+  tiposAjusteParaUnidad,
   TIPOS_ENTRADA,
   TIPOS_MINIMO,
   type TipoEntrada,
@@ -117,12 +119,18 @@ function TipoCampos({
   custom,
   onChange,
   className,
+  tipos,
 }: {
   tipo: TipoEntrada;
   custom: string;
   onChange: (tipo: TipoEntrada, custom: string) => void;
   className?: string;
+  tipos?: TipoEntrada[];
 }) {
+  const opciones = TIPOS_ENTRADA.filter((t) => !tipos || tipos.includes(t.id));
+  const lista = opciones.some((t) => t.id === tipo)
+    ? opciones
+    : [...opciones, { id: tipo, label: etiquetaTipo(tipo) }];
   return (
     <div className={`flex flex-wrap gap-2 ${className ?? ""}`}>
       <select
@@ -130,7 +138,7 @@ function TipoCampos({
         onChange={(e) => onChange(e.target.value as TipoEntrada, custom)}
         className="rounded-[10px] border border-fa-border bg-white px-2 py-2 text-sm text-fa-text"
       >
-        {TIPOS_ENTRADA.map((t) => (
+        {lista.map((t) => (
           <option key={t.id} value={t.id}>
             {t.label}
           </option>
@@ -197,6 +205,14 @@ export function InventarioClient({
   const [busy, setBusy] = useState(false);
   const [ajusteSel, setAjusteSel] = useState(rows[0]?.id ?? "");
   const [ajusteTipo, setAjusteTipo] = useState<"ENTRADA" | "AJUSTE">("AJUSTE");
+  const [ajusteTipoEntrada, setAjusteTipoEntrada] = useState<TipoEntrada>(
+    rows[0]
+      ? tipoFromIngredient(rows[0].unidadMedida, rows[0].unidadEtiqueta)
+      : "LIBRA",
+  );
+  const [ajusteUnidadCustom, setAjusteUnidadCustom] = useState(
+    rows[0] ? customFromIngredient(rows[0].unidadMedida, rows[0].unidadEtiqueta) : "",
+  );
   const [ajusteCantidad, setAjusteCantidad] = useState(0);
   const [ajusteNota, setAjusteNota] = useState("");
   const [nombres, setNombres] = useState<Record<string, string>>({});
@@ -222,6 +238,13 @@ export function InventarioClient({
     setTipoMinimo(tipoMinimoDesdeEntrada(tipo));
     setStockMinimo(round3(stockToDisplay(row.stockMinimo, row.unidadMedida, row.unidadEtiqueta)));
   }, [modo, sel, rows]);
+
+  useEffect(() => {
+    const row = rows.find((r) => r.id === ajusteSel);
+    if (!row) return;
+    setAjusteTipoEntrada(tipoFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+    setAjusteUnidadCustom(customFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+  }, [ajusteSel, rows]);
 
   const unidadEtiqueta = etiquetaVista(tipoEntrada, unidadCustom);
 
@@ -263,6 +286,35 @@ export function InventarioClient({
   );
 
   const ajusteRow = rows.find((r) => r.id === ajusteSel);
+  const ajusteUnidadEtiqueta = etiquetaVista(ajusteTipoEntrada, ajusteUnidadCustom);
+  const ajustePreview = useMemo(() => {
+    if (!ajusteRow || ajusteCantidad === 0) return null;
+    try {
+      const conv = ajusteToStock({
+        cantidad: ajusteCantidad,
+        tipoEntrada: ajusteTipoEntrada,
+        unidadCustom: ajusteUnidadCustom,
+        unidadProducto: ajusteRow.unidadMedida,
+      });
+      const signed =
+        ajusteTipo === "ENTRADA"
+          ? conv.cantidadStock
+          : Math.sign(ajusteCantidad) * conv.cantidadStock;
+      return formatStockCompra(
+        Math.abs(signed),
+        ajusteRow.unidadMedida,
+        ajusteRow.unidadEtiqueta,
+      );
+    } catch {
+      return null;
+    }
+  }, [
+    ajusteRow,
+    ajusteCantidad,
+    ajusteTipoEntrada,
+    ajusteUnidadCustom,
+    ajusteTipo,
+  ]);
 
   async function registrar() {
     setBusy(true);
@@ -304,6 +356,8 @@ export function InventarioClient({
     const res = await ajustarInventarioAction({
       ingredientId: ajusteSel,
       tipo: ajusteTipo,
+      tipoEntrada: ajusteTipoEntrada,
+      unidadCustom: ajusteUnidadCustom,
       cantidad: ajusteCantidad,
       nota: ajusteNota,
     });
@@ -594,53 +648,71 @@ export function InventarioClient({
           </form>
 
           <form
-            className="grid gap-2 rounded-[10px] border border-fa-border bg-fa-surface p-4 sm:grid-cols-5"
+            className="grid gap-3 rounded-[10px] border border-fa-border bg-fa-surface p-4 sm:grid-cols-2 lg:grid-cols-4"
             onSubmit={(e) => {
               e.preventDefault();
               void ajustar();
             }}
           >
-            <h2 className="text-sm font-semibold text-fa-primary sm:col-span-5">
+            <h2 className="text-sm font-semibold text-fa-primary sm:col-span-2 lg:col-span-4">
               Ajuste de stock
             </h2>
-            <select
-              value={ajusteSel}
-              onChange={(e) => setAjusteSel(e.target.value)}
-              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-2"
-            >
-              {rows.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.nombre}
-                </option>
-              ))}
-            </select>
-            <select
-              value={ajusteTipo}
-              onChange={(e) => setAjusteTipo(e.target.value as "ENTRADA" | "AJUSTE")}
-              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm"
-            >
-              <option value="ENTRADA">Entrada (+)</option>
-              <option value="AJUSTE">Ajuste (+/−)</option>
-            </select>
-            <input
-              type="number"
-              step="0.001"
-              value={ajusteCantidad}
-              onChange={(e) => setAjusteCantidad(Number(e.target.value))}
-              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm"
-              placeholder={
-                ajusteRow
-                  ? etiquetaVista(
-                      tipoFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
-                      customFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
-                    )
-                  : "Cantidad"
-              }
-            />
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-fa-muted">Producto</span>
+              <select
+                value={ajusteSel}
+                onChange={(e) => setAjusteSel(e.target.value)}
+                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+              >
+                {rows.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-fa-muted">Tipo</span>
+              <select
+                value={ajusteTipo}
+                onChange={(e) => setAjusteTipo(e.target.value as "ENTRADA" | "AJUSTE")}
+                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+              >
+                <option value="ENTRADA">Entrada (+)</option>
+                <option value="AJUSTE">Ajuste (+/−)</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-fa-muted">
+                Cantidad ({ajusteUnidadEtiqueta})
+              </span>
+              <input
+                type="number"
+                step="0.001"
+                value={ajusteCantidad}
+                onChange={(e) => setAjusteCantidad(Number(e.target.value))}
+                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+                placeholder={ajusteUnidadEtiqueta}
+              />
+            </label>
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-fa-muted">Ajustar por</span>
+              <TipoCampos
+                tipo={ajusteTipoEntrada}
+                custom={ajusteUnidadCustom}
+                tipos={
+                  ajusteRow ? tiposAjusteParaUnidad(ajusteRow.unidadMedida) : undefined
+                }
+                onChange={(tipo, custom) => {
+                  setAjusteTipoEntrada(tipo);
+                  setAjusteUnidadCustom(custom);
+                }}
+              />
+            </label>
             <button
               type="submit"
-              disabled={busy}
-              className="rounded-[10px] bg-fa-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              disabled={busy || !ajusteSel}
+              className="self-end rounded-[10px] bg-fa-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               Aplicar
             </button>
@@ -648,17 +720,14 @@ export function InventarioClient({
               value={ajusteNota}
               onChange={(e) => setAjusteNota(e.target.value)}
               placeholder="Nota (opcional)"
-              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-5"
+              className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-2 lg:col-span-4"
             />
-            <p className="text-xs text-fa-muted sm:col-span-5">
-              La cantidad va en{" "}
-              {ajusteRow
-                ? etiquetaVista(
-                    tipoFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
-                    customFromIngredient(ajusteRow.unidadMedida, ajusteRow.unidadEtiqueta),
-                  )
-                : "la unidad del producto"}
-              {ajusteTipo === "AJUSTE" ? " (negativo para restar)." : "."}
+            <p className="text-xs text-fa-muted sm:col-span-2 lg:col-span-4">
+              Elige la misma unidad con la que ingresaste el producto
+              {ajusteTipo === "AJUSTE" ? " (negativo para restar)" : ""}.
+              {ajustePreview
+                ? ` Se ${ajusteTipo === "ENTRADA" || ajusteCantidad > 0 ? "suman" : "restan"} ${ajustePreview}.`
+                : ""}
             </p>
           </form>
         </div>

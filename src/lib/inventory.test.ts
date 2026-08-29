@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { computeDeductionQty } from "./inventory";
 import { GRAMS_PER_LB, GRAMS_PER_OZ } from "./money";
 import {
+  ajusteToStock,
   displayToStock,
   minimoToStock,
   purchaseToStock,
   stockToDisplay,
   tipoFromIngredient,
+  tiposAjusteParaUnidad,
 } from "./inventory-units";
 
 describe("computeDeductionQty", () => {
@@ -188,6 +190,66 @@ describe("minimoToStock", () => {
         contenidoPorItem: 12,
       }),
     ).toBe(6);
+  });
+});
+
+describe("ajusteToStock", () => {
+  it("adds pounds on a weight product", () => {
+    const r = ajusteToStock({
+      cantidad: 2,
+      tipoEntrada: "LIBRA",
+      unidadProducto: "G",
+    });
+    expect(r.unidadMedida).toBe("G");
+    expect(r.cantidadStock).toBeCloseTo(2 * GRAMS_PER_LB, 5);
+    expect(r.etiqueta).toBe("lb");
+  });
+
+  it("lets a pound product be adjusted in ounces", () => {
+    const r = ajusteToStock({
+      cantidad: 16,
+      tipoEntrada: "ONZA",
+      unidadProducto: "G",
+    });
+    expect(r.cantidadStock).toBeCloseTo(GRAMS_PER_LB, 5);
+  });
+
+  it("adjusts counted products by unit", () => {
+    const r = ajusteToStock({
+      cantidad: 6,
+      tipoEntrada: "UNIDAD",
+      unidadProducto: "UD",
+    });
+    expect(r).toMatchObject({ unidadMedida: "UD", cantidadStock: 6, etiqueta: "ud" });
+  });
+
+  it("rejects liters on a weight product", () => {
+    expect(() =>
+      ajusteToStock({
+        cantidad: 1,
+        tipoEntrada: "LITRO",
+        unidadProducto: "G",
+      }),
+    ).toThrow(/peso/);
+  });
+
+  it("uses the absolute quantity so a minus sign can subtract later", () => {
+    const r = ajusteToStock({
+      cantidad: -3,
+      tipoEntrada: "UNIDAD",
+      unidadProducto: "UD",
+    });
+    expect(r.cantidadStock).toBe(3);
+  });
+});
+
+describe("tiposAjusteParaUnidad", () => {
+  it("offers weight units for gram products", () => {
+    expect(tiposAjusteParaUnidad("G")).toEqual(["LIBRA", "ONZA", "KILO", "OTRO"]);
+  });
+
+  it("offers count units for unit products", () => {
+    expect(tiposAjusteParaUnidad("UD")).toEqual(["ITEM", "UNIDAD", "OTRO"]);
   });
 });
 
