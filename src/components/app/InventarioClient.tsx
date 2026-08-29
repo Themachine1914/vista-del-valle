@@ -655,10 +655,24 @@ export function InventarioClient({
       </div>
 
       <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
-        <h2 className="border-b border-fa-border px-3 py-2 text-sm font-semibold text-fa-primary">
-          Productos
-          {q.trim() ? ` · ${visible.length} resultado${visible.length === 1 ? "" : "s"}` : ""}
-        </h2>
+        <div className="flex flex-col gap-2 border-b border-fa-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-semibold text-fa-primary">
+            Productos
+            {q.trim()
+              ? ` · ${visible.length} resultado${visible.length === 1 ? "" : "s"}`
+              : ` · ${visible.length}`}
+          </h2>
+          <label className="block w-full sm:max-w-xs">
+            <span className="sr-only">Buscar en productos</span>
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar producto…"
+              className="w-full rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
         <table className="w-full text-left text-sm">
           <thead className="bg-fa-bg text-fa-muted">
             <tr>
