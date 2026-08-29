@@ -24,6 +24,13 @@ export type RegistroPdfStock = {
   nombre: string;
   stock: string;
   minimo: string;
+  consumo: string;
+};
+
+export type RegistroPdfConsumo = {
+  producto: string;
+  consumo: string;
+  stock: string;
 };
 
 const ACCION: Record<string, string> = {
@@ -49,6 +56,7 @@ export function buildInventarioRegistroPdf(input: {
   audits: RegistroPdfAudit[];
   compras: RegistroPdfCompra[];
   stock: RegistroPdfStock[];
+  consumo?: RegistroPdfConsumo[];
   generadoPor: string;
   periodoLabel?: string;
 }): ArrayBuffer {
@@ -129,6 +137,25 @@ export function buildInventarioRegistroPdf(input: {
     },
   });
 
+  const consumo = input.consumo ?? [];
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...PRIMARY);
+  doc.text("Consumo del periodo", 14, tableStartY(doc) - 4);
+
+  autoTable(doc, {
+    startY: tableStartY(doc),
+    head: [["Producto", "Consumido", "Stock actual"]],
+    body:
+      consumo.length === 0
+        ? [["—", "Sin consumo", "—"]]
+        : consumo.map((c) => [c.producto, c.consumo, c.stock]),
+    theme: "grid",
+    styles: { fontSize: 8, cellPadding: 1.6, textColor: [15, 23, 42] },
+    headStyles: { fillColor: PRIMARY, textColor: HEAD_TEXT, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: ALT_ROW },
+  });
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...PRIMARY);
@@ -136,8 +163,8 @@ export function buildInventarioRegistroPdf(input: {
 
   autoTable(doc, {
     startY: tableStartY(doc),
-    head: [["Producto", "Stock", "Mínimo"]],
-    body: input.stock.map((s) => [s.nombre, s.stock, s.minimo]),
+    head: [["Producto", "Stock", "Mínimo", "Consumo"]],
+    body: input.stock.map((s) => [s.nombre, s.stock, s.minimo, s.consumo]),
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.6, textColor: [15, 23, 42] },
     headStyles: { fillColor: PRIMARY, textColor: HEAD_TEXT, fontStyle: "bold" },

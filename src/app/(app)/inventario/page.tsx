@@ -4,6 +4,7 @@ import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
 import { parsePeriodo, type PeriodoFiltro } from "@/lib/period";
 import { InventarioClient } from "@/components/app/InventarioClient";
 import { redirect } from "next/navigation";
+import { sumarConsumo } from "@/lib/inventory-consumo";
 import {
   comparacionVsAnterior,
   etiquetaPrecioCompra,
@@ -32,7 +33,7 @@ export default async function InventarioPage({
   const periodo = parsePeriodo({ ...sp, periodo: sp.periodo ?? "mes" });
   const range = { gte: periodo.gte, lt: periodo.lt };
 
-  const [ingredients, audits, compras, entradas] = await Promise.all([
+  const [ingredients, audits, compras, entradas, ventas] = await Promise.all([
     prisma.ingredient.findMany({ orderBy: { nombre: "asc" } }),
     prisma.inventoryAudit.findMany({
       where: { createdAt: range },
@@ -54,7 +55,17 @@ export default async function InventarioPage({
         ingredient: { select: { unidadMedida: true, unidadEtiqueta: true } },
       },
     }),
+    prisma.inventoryMovement.findMany({
+      where: { tipo: "VENTA", fecha: range },
+      select: { ingredientId: true, cantidad: true },
+    }),
   ]);
+  const consumoPorId = sumarConsumo(
+    ventas.map((m) => ({
+      ingredientId: m.ingredientId,
+      cantidad: toMoney(m.cantidad),
+    })),
+  );
   const historial: MovimientoPrecio[] = entradas.map((m) => ({
     id: m.id,
     ingredientId: m.ingredientId,
@@ -66,17 +77,25 @@ export default async function InventarioPage({
     unidadEtiqueta: m.ingredient.unidadEtiqueta,
   }));
   const ultimas = ultimasComprasPorProducto(historial);
-  const rows = ingredients.map((i) => ({
-    id: i.id,
-    nombre: i.nombre,
-    unidadMedida: i.unidadMedida,
-    unidadEtiqueta: i.unidadEtiqueta,
-    stockActual: toMoney(i.stockActual),
-    stockMinimo: toMoney(i.stockMinimo),
-    bajo: toMoney(i.stockActual) < toMoney(i.stockMinimo),
-    etiqueta: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
-    minimoEtiqueta: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
-  }));
+  const rows = ingredients.map((i) => {
+    const consumo = consumoPorId[i.id] ?? 0;
+    return {
+      id: i.id,
+      nombre: i.nombre,
+      unidadMedida: i.unidadMedida,
+      unidadEtiqueta: i.unidadEtiqueta,
+      stockActual: toMoney(i.stockActual),
+      stockMinimo: toMoney(i.stockMinimo),
+      bajo: toMoney(i.stockActual) < toMoney(i.stockMinimo),
+      etiqueta: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
+      minimoEtiqueta: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
+      consumo,
+      consumoEtiqueta:
+        consumo > 0
+          ? formatStockCompra(consumo, i.unidadMedida, i.unidadEtiqueta)
+          : "—",
+    };
+  });
   const filtro: PeriodoFiltro = {
     modo: periodo.modo,
     fecha: periodo.fecha,
@@ -91,6 +110,7 @@ export default async function InventarioPage({
     bajas: audits.filter((a) => a.accion === "BAJA").length,
     cambios: audits.filter((a) => a.accion === "RENOMBRE").length,
     compras: compras.length,
+    consumo: Object.keys(consumoPorId).length,
   };
   return (
     <InventarioClient

@@ -31,6 +31,7 @@ async function deductRecipe(
   units: number,
   userId: string,
   nota: string,
+  fecha: Date,
 ) {
   const recipe = await tx.recipe.findUnique({
     where: { dishId },
@@ -55,6 +56,7 @@ async function deductRecipe(
         cantidad: qty.negated(),
         nota,
         userId,
+        fecha,
       },
     });
   }
@@ -114,6 +116,7 @@ export async function registerSaleItems(input: {
         item.cantidad,
         input.userId,
         `Venta: ${dish.nombre}`,
+        input.fecha,
       );
       if (item.garnishId) {
         const garnish = await tx.dish.findUniqueOrThrow({
@@ -125,6 +128,7 @@ export async function registerSaleItems(input: {
           item.cantidad,
           input.userId,
           `Guarnición: ${garnish.nombre}`,
+          input.fecha,
         );
       }
     }

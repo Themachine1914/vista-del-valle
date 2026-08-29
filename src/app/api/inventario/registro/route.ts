@@ -4,6 +4,7 @@ import {
   buildInventarioRegistroPdf,
   registroPdfFilename,
 } from "@/lib/inventory-registro-pdf";
+import { sumarConsumo } from "@/lib/inventory-consumo";
 import { etiquetaPrecioCompra } from "@/lib/inventory-precio";
 import { formatFechaCorta, formatStockCompra, toMoney } from "@/lib/money";
 import { parsePeriodo } from "@/lib/period";
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   const periodo = parsePeriodo(sp);
   const range = { gte: periodo.gte, lt: periodo.lt };
 
-  const [audits, compras, stock] = await Promise.all([
+  const [audits, compras, stock, ventas] = await Promise.all([
     prisma.inventoryAudit.findMany({
       where: { createdAt: range },
       orderBy: { createdAt: "desc" },
@@ -36,7 +37,17 @@ export async function GET(request: Request) {
       },
     }),
     prisma.ingredient.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.inventoryMovement.findMany({
+      where: { tipo: "VENTA", fecha: range },
+      select: { ingredientId: true, cantidad: true },
+    }),
   ]);
+  const consumoPorId = sumarConsumo(
+    ventas.map((m) => ({
+      ingredientId: m.ingredientId,
+      cantidad: toMoney(m.cantidad),
+    })),
+  );
 
   const bytes = buildInventarioRegistroPdf({
     generadoPor: session.user.name ?? session.user.email ?? "Staff",
@@ -69,11 +80,30 @@ export async function GET(request: Request) {
         usuario: m.user?.name ?? "Sistema",
       };
     }),
-    stock: stock.map((i) => ({
-      nombre: i.nombre,
-      stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
-      minimo: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
-    })),
+    stock: stock.map((i) => {
+      const consumo = consumoPorId[i.id] ?? 0;
+      return {
+        nombre: i.nombre,
+        stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
+        minimo: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
+        consumo:
+          consumo > 0
+            ? formatStockCompra(consumo, i.unidadMedida, i.unidadEtiqueta)
+            : "—",
+      };
+    }),
+    consumo: stock
+      .filter((i) => (consumoPorId[i.id] ?? 0) > 0)
+      .sort((a, b) => (consumoPorId[b.id] ?? 0) - (consumoPorId[a.id] ?? 0))
+      .map((i) => ({
+        producto: i.nombre,
+        consumo: formatStockCompra(
+          consumoPorId[i.id] ?? 0,
+          i.unidadMedida,
+          i.unidadEtiqueta,
+        ),
+        stock: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
+      })),
   });
 
   return new NextResponse(Buffer.from(bytes), {

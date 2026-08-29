@@ -25,7 +25,8 @@ describe("buildInventarioRegistroPdf", () => {
           usuario: "Administradora",
         },
       ],
-      stock: [{ nombre: "Arroz", stock: "50 lb", minimo: "10 lb" }],
+      stock: [{ nombre: "Arroz", stock: "50 lb", minimo: "10 lb", consumo: "8 lb" }],
+      consumo: [{ producto: "Arroz", consumo: "8 lb", stock: "50 lb" }],
     });
     const header = Buffer.from(bytes.slice(0, 5)).toString("utf8");
     expect(header).toBe("%PDF-");

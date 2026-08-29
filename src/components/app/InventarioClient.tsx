@@ -19,6 +19,7 @@ import {
 } from "@/lib/inventory-units";
 import { formatRD, formatRDUnitario, formatStockCompra } from "@/lib/money";
 import { type PeriodoFiltro } from "@/lib/period";
+import { coincideBusqueda } from "@/lib/inventory-consumo";
 import { type UltimaCompra } from "@/lib/inventory-precio";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -33,6 +34,8 @@ type Row = {
   bajo: boolean;
   etiqueta: string;
   minimoEtiqueta: string;
+  consumo: number;
+  consumoEtiqueta: string;
 };
 
 type AuditRow = {
@@ -145,7 +148,13 @@ export function InventarioClient({
   ultimas: Record<string, UltimaCompra>;
   defaultFecha: string;
   periodo: PeriodoFiltro;
-  resumen: { altas: number; bajas: number; cambios: number; compras: number };
+  resumen: {
+    altas: number;
+    bajas: number;
+    cambios: number;
+    compras: number;
+    consumo: number;
+  };
 }) {
   const router = useRouter();
   const [soloAlertas, setSoloAlertas] = useState(false);
@@ -217,8 +226,13 @@ export function InventarioClient({
 
   const visible = rows.filter((r) => {
     if (soloAlertas && !r.bajo) return false;
-    return r.nombre.toLowerCase().includes(q.toLowerCase());
+    return coincideBusqueda(r.nombre, q);
   });
+  const consumidos = rows
+    .filter((r) => r.consumo > 0 && coincideBusqueda(r.nombre, q))
+    .sort((a, b) => b.consumo - a.consumo);
+  const productosForm = rows.filter((r) => coincideBusqueda(r.nombre, q));
+  const comprasVisibles = compras.filter((c) => coincideBusqueda(c.producto, q));
 
   const ajusteRow = rows.find((r) => r.id === ajusteSel);
 
@@ -348,16 +362,20 @@ export function InventarioClient({
 
       <PeriodFilter basePath="/inventario" periodo={periodo} />
       <p className="text-sm text-fa-muted">
-        {periodo.label}: {resumen.altas} altas · {resumen.bajas} bajas · {resumen.cambios}{" "}
-        cambios · {resumen.compras} compras
+        {periodo.label}: {resumen.consumo} productos consumidos · {resumen.compras}{" "}
+        compras · {resumen.altas} altas · {resumen.bajas} bajas · {resumen.cambios}{" "}
+        cambios
       </p>
 
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Buscar producto"
-        className="w-full max-w-sm rounded-[10px] border border-fa-border px-3 py-2 text-sm"
-      />
+      <label className="block w-full max-w-xl">
+        <span className="mb-1 block text-sm text-fa-muted">Buscar producto</span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Escribe el nombre, por ejemplo arroz o aceite"
+          className="w-full rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+        />
+      </label>
 
       {canAdjust ? (
         <div className="space-y-4">
@@ -385,10 +403,10 @@ export function InventarioClient({
                 onChange={(e) => setSel(e.target.value)}
                 className="rounded-[10px] border border-fa-border px-2 py-2 text-sm sm:col-span-1 lg:col-span-3"
               >
-                {rows.length === 0 ? (
+                {productosForm.length === 0 ? (
                   <option value="">No hay productos</option>
                 ) : (
-                  rows.map((r) => (
+                  productosForm.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.nombre}
                     </option>
@@ -603,11 +621,50 @@ export function InventarioClient({
       {msg ? <p className="text-sm text-fa-muted">{msg}</p> : null}
 
       <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
+        <h2 className="border-b border-fa-border px-3 py-2 text-sm font-semibold text-fa-primary">
+          Consumo · {periodo.label}
+          {q.trim() ? ` · ${consumidos.length} resultado${consumidos.length === 1 ? "" : "s"}` : ""}
+        </h2>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-fa-bg text-fa-muted">
+            <tr>
+              <th className="px-3 py-2">Producto</th>
+              <th className="px-3 py-2">Consumido</th>
+              <th className="px-3 py-2">Stock actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {consumidos.map((r) => (
+              <tr key={r.id} className="border-t border-fa-border">
+                <td className="px-3 py-2 font-medium">{r.nombre}</td>
+                <td className="px-3 py-2">{r.consumoEtiqueta}</td>
+                <td className="px-3 py-2 text-fa-muted">{r.etiqueta}</td>
+              </tr>
+            ))}
+            {consumidos.length === 0 ? (
+              <tr>
+                <td className="px-3 py-4 text-fa-muted" colSpan={3}>
+                  {q.trim()
+                    ? "Ningún producto de la búsqueda se consumió en este periodo."
+                    : "Aún no hay consumo de ventas en este periodo."}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
+        <h2 className="border-b border-fa-border px-3 py-2 text-sm font-semibold text-fa-primary">
+          Productos
+          {q.trim() ? ` · ${visible.length} resultado${visible.length === 1 ? "" : "s"}` : ""}
+        </h2>
         <table className="w-full text-left text-sm">
           <thead className="bg-fa-bg text-fa-muted">
             <tr>
               <th className="px-3 py-2">Producto</th>
               <th className="px-3 py-2">Stock</th>
+              <th className="px-3 py-2">Consumo · {periodo.label}</th>
               <th className="px-3 py-2">Entrada</th>
               <th className="px-3 py-2">Mínimo</th>
               {canAdjust ? <th className="px-3 py-2">Acciones</th> : null}
@@ -633,6 +690,7 @@ export function InventarioClient({
                   )}
                 </td>
                 <td className="px-3 py-2">{r.etiqueta}</td>
+                <td className="px-3 py-2">{r.consumoEtiqueta}</td>
                 <td className="px-3 py-2">
                   {canAdjust ? (
                     <TipoCampos
@@ -714,8 +772,8 @@ export function InventarioClient({
             ))}
             {visible.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-fa-muted" colSpan={canAdjust ? 5 : 4}>
-                  No hay productos.
+                <td className="px-3 py-6 text-fa-muted" colSpan={canAdjust ? 6 : 5}>
+                  {q.trim() ? "Ningún producto coincide con la búsqueda." : "No hay productos."}
                 </td>
               </tr>
             ) : null}
@@ -775,7 +833,7 @@ export function InventarioClient({
               </tr>
             </thead>
             <tbody>
-              {compras.map((c) => {
+              {comprasVisibles.map((c) => {
                 const vs = textoVsAnterior(c.vsAnterior);
                 return (
                 <tr key={c.id} className="border-t border-fa-border">
@@ -808,10 +866,12 @@ export function InventarioClient({
                 </tr>
                 );
               })}
-              {compras.length === 0 ? (
+              {comprasVisibles.length === 0 ? (
                 <tr>
                   <td className="px-3 py-4 text-fa-muted" colSpan={5}>
-                    Aún no hay compras.
+                    {q.trim()
+                      ? "Ninguna compra coincide con la búsqueda."
+                      : "Aún no hay compras."}
                   </td>
                 </tr>
               ) : null}

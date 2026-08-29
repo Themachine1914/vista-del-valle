@@ -32,13 +32,22 @@ export default async function AppLayout({
     <div data-theme="app" className="min-h-screen bg-fa-bg text-fa-text">
       <header className="border-b border-fa-border bg-fa-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <p className="text-xs font-medium tracking-wide text-fa-accent uppercase">
-              FacilApp · Vista del Valle
-            </p>
-            <p className="text-sm text-fa-muted">
-              {session.user.name} · {ROLE_LABEL[session.user.role]}
-            </p>
+          <div className="flex items-center gap-2">
+            <img
+              src="/icons/icon-192.png"
+              alt="Vista del Valle"
+              width={36}
+              height={36}
+              className="rounded-[10px]"
+            />
+            <div>
+              <p className="text-xs font-medium tracking-wide text-fa-accent uppercase">
+                FacilApp · Vista del Valle
+              </p>
+              <p className="text-sm text-fa-muted">
+                {session.user.name} · {ROLE_LABEL[session.user.role]}
+              </p>
+            </div>
           </div>
           <nav className="flex flex-wrap items-center gap-1">
             {links.map((l) => (
