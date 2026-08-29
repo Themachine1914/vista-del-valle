@@ -49,11 +49,11 @@ export function MenuView({ categories }: { categories: MenuCategory[] }) {
       <header className="relative overflow-hidden bg-pine text-mist">
         <div className="mx-auto max-w-5xl px-4 pt-10 pb-8">
           <img
-            src="/icons/icon-192.png"
+            src="/logo.png"
             alt="Vista del Valle"
-            width={64}
-            height={64}
-            className="mb-4 rounded-[10px] ring-1 ring-mist/20"
+            width={96}
+            height={96}
+            className="mb-4 rounded-[10px] bg-white ring-1 ring-mist/20"
           />
           <p className="text-xs tracking-[0.28em] text-lamp uppercase">
             Carretera Casabito · Constanza

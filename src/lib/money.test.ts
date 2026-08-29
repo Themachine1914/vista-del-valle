@@ -70,4 +70,8 @@ describe("formatStockCompra", () => {
   it("shows a custom unit name", () => {
     expect(formatStockCompra(12, "UD", "caja")).toBe("12 caja");
   });
+
+  it("shows ounce stock when labeled oz", () => {
+    expect(formatStockCompra(GRAMS_PER_LB, "G", "oz")).toBe("16 oz");
+  });
 });

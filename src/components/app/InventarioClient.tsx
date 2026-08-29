@@ -10,12 +10,17 @@ import { PeriodFilter } from "@/components/app/PeriodFilter";
 import { PdfDownload } from "@/components/app/PdfDownload";
 import {
   customFromIngredient,
+  etiquetaMinimo,
   etiquetaTipo,
   purchaseToStock,
   resolveEntrada,
   stockToDisplay,
   tipoFromIngredient,
+  tipoMinimoDesdeEntrada,
+  TIPOS_ENTRADA,
+  TIPOS_MINIMO,
   type TipoEntrada,
+  type TipoMinimo,
 } from "@/lib/inventory-units";
 import { formatRD, formatRDUnitario, formatStockCompra } from "@/lib/money";
 import { type PeriodoFiltro } from "@/lib/period";
@@ -79,14 +84,6 @@ function round3(n: number) {
   return Math.round(n * 1000) / 1000;
 }
 
-const TIPOS: { id: TipoEntrada; label: string }[] = [
-  { id: "LIBRA", label: "Libra" },
-  { id: "KILO", label: "Kilo" },
-  { id: "LITRO", label: "Litro" },
-  { id: "UNIDAD", label: "Unidad" },
-  { id: "OTRO", label: "Otra (escribir)" },
-];
-
 function etiquetaVista(tipo: TipoEntrada, custom: string) {
   try {
     return resolveEntrada(tipo, custom).etiqueta;
@@ -113,7 +110,7 @@ function TipoCampos({
         onChange={(e) => onChange(e.target.value as TipoEntrada, custom)}
         className="rounded-[10px] border border-fa-border bg-white px-2 py-2 text-sm text-fa-text"
       >
-        {TIPOS.map((t) => (
+        {TIPOS_ENTRADA.map((t) => (
           <option key={t.id} value={t.id}>
             {t.label}
           </option>
@@ -168,6 +165,7 @@ export function InventarioClient({
   const [cantidadItems, setCantidadItems] = useState(1);
   const [contenidoPorItem, setContenidoPorItem] = useState(1);
   const [stockMinimo, setStockMinimo] = useState(0);
+  const [tipoMinimo, setTipoMinimo] = useState<TipoMinimo>("LIBRA");
   const [precioTotal, setPrecioTotal] = useState("");
   const [nota, setNota] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -193,8 +191,10 @@ export function InventarioClient({
     if (modo !== "existente") return;
     const row = rows.find((r) => r.id === sel);
     if (!row) return;
-    setTipoEntrada(tipoFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+    const tipo = tipoFromIngredient(row.unidadMedida, row.unidadEtiqueta);
+    setTipoEntrada(tipo);
     setUnidadCustom(customFromIngredient(row.unidadMedida, row.unidadEtiqueta));
+    setTipoMinimo(tipoMinimoDesdeEntrada(tipo));
     setStockMinimo(round3(stockToDisplay(row.stockMinimo, row.unidadMedida, row.unidadEtiqueta)));
   }, [modo, sel, rows]);
 
@@ -247,6 +247,7 @@ export function InventarioClient({
       cantidadItems,
       contenidoPorItem,
       stockMinimo,
+      tipoMinimo,
       fecha,
       precioTotal,
       nota,
@@ -440,22 +441,36 @@ export function InventarioClient({
                 onChange={(tipo, custom) => {
                   setTipoEntrada(tipo);
                   setUnidadCustom(custom);
+                  setTipoMinimo(tipoMinimoDesdeEntrada(tipo));
                 }}
               />
             </label>
-            <label className="text-sm">
+            <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-fa-muted">
-                Límite mínimo ({unidadEtiqueta})
+                Límite mínimo ({etiquetaMinimo(tipoMinimo)})
               </span>
-              <input
-                type="number"
-                min={0}
-                step="0.001"
-                value={stockMinimo}
-                onChange={(e) => setStockMinimo(Number(e.target.value))}
-                className="w-full rounded-[10px] border border-fa-border px-2 py-2 text-sm"
-                placeholder="Alerta si baja de este nivel"
-              />
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.001"
+                  value={stockMinimo}
+                  onChange={(e) => setStockMinimo(Number(e.target.value))}
+                  className="min-w-24 flex-1 rounded-[10px] border border-fa-border px-2 py-2 text-sm"
+                  placeholder="Alerta si baja de este nivel"
+                />
+                <select
+                  value={tipoMinimo}
+                  onChange={(e) => setTipoMinimo(e.target.value as TipoMinimo)}
+                  className="rounded-[10px] border border-fa-border bg-white px-2 py-2 text-sm text-fa-text"
+                >
+                  {TIPOS_MINIMO.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-fa-muted">Cantidad de ítems</span>
@@ -483,13 +498,17 @@ export function InventarioClient({
                 placeholder={
                   tipoEntrada === "LIBRA"
                     ? "Ej. 25 si cada saco pesa 25 lb"
-                    : tipoEntrada === "KILO"
-                      ? "Ej. 25 si cada saco pesa 25 kg"
-                      : tipoEntrada === "LITRO"
-                        ? "Ej. 1.5 si cada botella es 1.5 L"
-                        : tipoEntrada === "OTRO"
-                          ? "Ej. 1 o el contenido de cada ítem"
-                          : "Ej. 1 o 12 si es un paquete"
+                    : tipoEntrada === "ONZA"
+                      ? "Ej. 34 si cada envase tiene 34 oz"
+                      : tipoEntrada === "KILO"
+                        ? "Ej. 25 si cada saco pesa 25 kg"
+                        : tipoEntrada === "LITRO"
+                          ? "Ej. 1.5 si cada botella es 1.5 L"
+                          : tipoEntrada === "ITEM" || tipoEntrada === "UNIDAD"
+                            ? "Ej. 1 o 12 si es un paquete"
+                            : tipoEntrada === "OTRO"
+                              ? "Ej. 1 o el contenido de cada ítem"
+                              : "Ej. 1 o 12 si es un paquete"
                 }
               />
             </label>

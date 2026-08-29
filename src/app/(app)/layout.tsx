@@ -34,11 +34,11 @@ export default async function AppLayout({
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
             <img
-              src="/icons/icon-192.png"
+              src="/logo.png"
               alt="Vista del Valle"
-              width={36}
-              height={36}
-              className="rounded-[10px]"
+              width={40}
+              height={40}
+              className="rounded-[10px] bg-white"
             />
             <div>
               <p className="text-xs font-medium tracking-wide text-fa-accent uppercase">

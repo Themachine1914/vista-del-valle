@@ -45,6 +45,7 @@ export function formatQty(
 /** 1 libra = 16 oz ≈ 453.592 g (uso de cocina en RD). */
 export const GRAMS_PER_LB = 453.592;
 export const GRAMS_PER_KG = 1000;
+export const GRAMS_PER_OZ = GRAMS_PER_LB / 16;
 
 function formatPlain(n: number, maxFrac = 2): string {
   const rounded = Math.round(n * 10 ** maxFrac) / 10 ** maxFrac;
@@ -69,6 +70,17 @@ export function formatStockCompra(
     return `${formatPlain(n / GRAMS_PER_KG)} ${e}`;
   }
   if (key === "g" || key === "gr" || key === "gramo" || key === "gramos") {
+    return `${formatPlain(n)} ${e}`;
+  }
+  if (
+    key === "oz" ||
+    key === "onza" ||
+    key === "onzas" ||
+    key === "onz"
+  ) {
+    return `${formatPlain(n / GRAMS_PER_OZ)} ${e}`;
+  }
+  if (key === "ítem" || key === "item" || key === "ítems" || key === "items") {
     return `${formatPlain(n)} ${e}`;
   }
   if (key === "ml" || key === "mililitro" || key === "mililitros") {

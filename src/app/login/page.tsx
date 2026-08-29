@@ -14,10 +14,10 @@ export default async function LoginPage() {
     <div data-theme="app" className="flex min-h-screen items-center justify-center bg-fa-bg px-4">
       <div className="w-full max-w-md rounded-[10px] border border-fa-border bg-fa-surface p-8 shadow-[0_1px_2px_rgb(15_23_42_/_6%)]">
         <img
-          src="/icons/icon-192.png"
+          src="/logo.png"
           alt="Vista del Valle"
-          width={48}
-          height={48}
+          width={88}
+          height={88}
           className="rounded-[10px]"
         />
         <p className="mt-3 text-xs font-medium tracking-wide text-fa-accent uppercase">FacilApp</p>

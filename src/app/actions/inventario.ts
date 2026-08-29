@@ -6,13 +6,16 @@ import { adjustStock, slugIngredientId } from "@/lib/inventory";
 import {
   customFromIngredient,
   displayToStock,
+  etiquetaMinimo,
   etiquetaTipo,
+  minimoToStock,
   purchaseToStock,
   resolveEntrada,
   stockToDisplay,
   tipoFromIngredient,
   tipoFromUnidad,
   type TipoEntrada,
+  type TipoMinimo,
 } from "@/lib/inventory-units";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -112,11 +115,12 @@ export async function ajustarInventarioAction(raw: unknown) {
 const compraSchema = z.object({
   ingredientId: z.string().optional(),
   nombreNuevo: z.string().max(80).optional(),
-  tipoEntrada: z.enum(["LIBRA", "KILO", "LITRO", "UNIDAD", "OTRO"]),
+  tipoEntrada: z.enum(["LIBRA", "ONZA", "KILO", "LITRO", "ITEM", "UNIDAD", "OTRO"]),
   unidadCustom: z.string().max(24).optional(),
   cantidadItems: z.coerce.number().positive(),
   contenidoPorItem: z.coerce.number().positive(),
   stockMinimo: z.coerce.number().min(0),
+  tipoMinimo: z.enum(["ONZA", "LIBRA", "ITEM", "UNIDAD"]).optional(),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   precioTotal: z.coerce.number().positive(),
   nota: z.string().max(200).optional(),
@@ -146,11 +150,15 @@ export async function registrarCompraAction(raw: unknown) {
     });
     const fecha = parseDay(data.fecha);
     const etiquetaUnidad = conv.etiqueta;
-    const minimoInterno = displayToStock(
-      data.stockMinimo,
-      data.tipoEntrada,
-      data.unidadCustom,
-    );
+    const tipoMinimo = (data.tipoMinimo ?? "UNIDAD") as TipoMinimo;
+    const minimoInterno = minimoToStock({
+      valor: data.stockMinimo,
+      tipoMinimo,
+      tipoEntrada: data.tipoEntrada as TipoEntrada,
+      unidadCustom: data.unidadCustom,
+      contenidoPorItem: data.contenidoPorItem,
+    });
+    const etiquetaMin = etiquetaMinimo(tipoMinimo);
     const notaCompra =
       data.nota?.trim() ||
       `Compra ${data.fecha}: ${data.cantidadItems} × ${data.contenidoPorItem} ${etiquetaUnidad}`;
@@ -183,7 +191,7 @@ export async function registrarCompraAction(raw: unknown) {
           data: {
             accion: "ALTA",
             nombre: ingredient.nombre,
-            detalle: `Producto nuevo · ${etiquetaUnidad} · mín. ${data.stockMinimo} ${etiquetaUnidad}`,
+            detalle: `Producto nuevo · ${etiquetaUnidad} · mín. ${data.stockMinimo} ${etiquetaMin}`,
             userId: session.user.id,
           },
         });
@@ -281,7 +289,7 @@ export async function registrarCompraAction(raw: unknown) {
 const renameSchema = z.object({
   id: z.string().min(1),
   nombre: z.string().min(1).max(80),
-  tipoEntrada: z.enum(["LIBRA", "KILO", "LITRO", "UNIDAD", "OTRO"]),
+  tipoEntrada: z.enum(["LIBRA", "ONZA", "KILO", "LITRO", "ITEM", "UNIDAD", "OTRO"]),
   unidadCustom: z.string().max(24).optional(),
   stockMinimo: z.coerce.number().min(0),
 });

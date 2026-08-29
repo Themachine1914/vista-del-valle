@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { computeDeductionQty } from "./inventory";
-import { GRAMS_PER_LB } from "./money";
-import { purchaseToStock, displayToStock, stockToDisplay } from "./inventory-units";
+import { GRAMS_PER_LB, GRAMS_PER_OZ } from "./money";
+import {
+  displayToStock,
+  minimoToStock,
+  purchaseToStock,
+  stockToDisplay,
+  tipoFromIngredient,
+} from "./inventory-units";
 
 describe("computeDeductionQty", () => {
   it("deducts the exact recipe quantity when units sold equals the yield", () => {
@@ -130,5 +136,67 @@ describe("stock display conversion", () => {
   it("treats zero display as zero stock", () => {
     expect(displayToStock(0, "LITRO")).toBe(0);
     expect(stockToDisplay(0, "ML")).toBe(0);
+  });
+
+  it("round-trips ounces through grams", () => {
+    const internal = displayToStock(16, "ONZA");
+    expect(internal).toBeCloseTo(GRAMS_PER_LB, 5);
+    expect(stockToDisplay(internal, "G", "oz")).toBeCloseTo(16, 5);
+  });
+});
+
+describe("minimoToStock", () => {
+  it("stores a 6 oz minimum as grams when the purchase is in ounces", () => {
+    expect(
+      minimoToStock({
+        valor: 6,
+        tipoMinimo: "ONZA",
+        tipoEntrada: "ONZA",
+        contenidoPorItem: 34,
+      }),
+    ).toBeCloseTo(6 * GRAMS_PER_OZ, 5);
+  });
+
+  it("stores a 2-item minimum as the contents of those items", () => {
+    expect(
+      minimoToStock({
+        valor: 2,
+        tipoMinimo: "ITEM",
+        tipoEntrada: "ONZA",
+        contenidoPorItem: 34,
+      }),
+    ).toBeCloseTo(68 * GRAMS_PER_OZ, 5);
+  });
+
+  it("stores a unit minimum as packages when the purchase is by weight", () => {
+    expect(
+      minimoToStock({
+        valor: 1,
+        tipoMinimo: "UNIDAD",
+        tipoEntrada: "LIBRA",
+        contenidoPorItem: 25,
+      }),
+    ).toBeCloseTo(25 * GRAMS_PER_LB, 5);
+  });
+
+  it("stores a unit minimum as units when the product is counted", () => {
+    expect(
+      minimoToStock({
+        valor: 6,
+        tipoMinimo: "UNIDAD",
+        tipoEntrada: "UNIDAD",
+        contenidoPorItem: 12,
+      }),
+    ).toBe(6);
+  });
+});
+
+describe("tipoFromIngredient", () => {
+  it("does not treat a leftover Onza label on units as grams", () => {
+    expect(tipoFromIngredient("UD", "Onza")).toBe("OTRO");
+  });
+
+  it("recognizes ounces stored as grams", () => {
+    expect(tipoFromIngredient("G", "oz")).toBe("ONZA");
   });
 });
