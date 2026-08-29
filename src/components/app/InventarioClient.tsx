@@ -38,9 +38,11 @@ type Row = {
   unidadMedida: "G" | "ML" | "UD";
   unidadEtiqueta: string;
   contenidoPorItem: number;
+  tipoMinimo: TipoMinimo;
   envaseEtiqueta: string;
   stockActual: number;
   stockMinimo: number;
+  minimoVisible: number;
   bajo: boolean;
   etiqueta: string;
   minimoEtiqueta: string;
@@ -222,6 +224,8 @@ export function InventarioClient({
   const [tiposFila, setTiposFila] = useState<Record<string, TipoEntrada>>({});
   const [customFila, setCustomFila] = useState<Record<string, string>>({});
   const [minimos, setMinimos] = useState<Record<string, number>>({});
+  const [contenidos, setContenidos] = useState<Record<string, number>>({});
+  const [tiposMinimoFila, setTiposMinimoFila] = useState<Record<string, TipoMinimo>>({});
 
   useEffect(() => {
     if (rows.length === 0) return;
@@ -386,16 +390,18 @@ export function InventarioClient({
     const custom =
       customFila[id] ??
       (row ? customFromIngredient(row.unidadMedida, row.unidadEtiqueta) : "");
+    const contenido = contenidos[id] ?? row?.contenidoPorItem ?? 1;
+    const tipoMin = tiposMinimoFila[id] ?? row?.tipoMinimo ?? tipoMinimoDesdeEntrada(tipo);
     const minimo =
       minimos[id] ??
-      (row
-        ? round3(stockToDisplay(row.stockMinimo, row.unidadMedida, row.unidadEtiqueta))
-        : 0);
+      (row ? round3(row.minimoVisible) : 0);
     const res = await guardarProductoAction({
       id,
       nombre,
       tipoEntrada: tipo,
       unidadCustom: custom,
+      contenidoPorItem: contenido,
+      tipoMinimo: tipoMin,
       stockMinimo: minimo,
     });
     if (!res.ok) {
@@ -875,57 +881,93 @@ export function InventarioClient({
                 <td className="px-3 py-2">{r.consumoEtiqueta}</td>
                 <td className="px-3 py-2">
                   {canAdjust ? (
-                    <TipoCampos
-                      tipo={
-                        tiposFila[r.id] ??
-                        tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta)
-                      }
-                      custom={
-                        customFila[r.id] ??
-                        customFromIngredient(r.unidadMedida, r.unidadEtiqueta)
-                      }
-                      onChange={(tipo, custom) => {
-                        setTiposFila((prev) => ({ ...prev, [r.id]: tipo }));
-                        setCustomFila((prev) => ({ ...prev, [r.id]: custom }));
-                      }}
-                    />
+                    <div className="flex min-w-52 flex-col gap-1">
+                      <TipoCampos
+                        tipo={
+                          tiposFila[r.id] ??
+                          tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta)
+                        }
+                        custom={
+                          customFila[r.id] ??
+                          customFromIngredient(r.unidadMedida, r.unidadEtiqueta)
+                        }
+                        onChange={(tipo, custom) => {
+                          setTiposFila((prev) => ({ ...prev, [r.id]: tipo }));
+                          setCustomFila((prev) => ({ ...prev, [r.id]: custom }));
+                          setTiposMinimoFila((prev) => ({
+                            ...prev,
+                            [r.id]: tipoMinimoDesdeEntrada(tipo),
+                          }));
+                        }}
+                      />
+                      <label className="flex items-center gap-1">
+                        <span className="shrink-0 text-xs text-fa-muted">1 ud =</span>
+                        <input
+                          type="number"
+                          min={0.001}
+                          step="0.001"
+                          value={contenidos[r.id] ?? r.contenidoPorItem}
+                          onChange={(e) =>
+                            setContenidos((prev) => ({
+                              ...prev,
+                              [r.id]: Number(e.target.value),
+                            }))
+                          }
+                          className="w-20 rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
+                        />
+                        <span className="text-xs text-fa-muted">
+                          {etiquetaVista(
+                            tiposFila[r.id] ??
+                              tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                            customFila[r.id] ??
+                              customFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                          )}
+                        </span>
+                      </label>
+                    </div>
                   ) : (
-                    etiquetaVista(
-                      tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta),
-                      customFromIngredient(r.unidadMedida, r.unidadEtiqueta),
-                    )
+                    <span>
+                      {etiquetaVista(
+                        tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                        customFromIngredient(r.unidadMedida, r.unidadEtiqueta),
+                      )}
+                      <span className="block text-xs text-fa-muted">{r.envaseEtiqueta}</span>
+                    </span>
                   )}
                 </td>
                 <td className="px-3 py-2">
                   {canAdjust ? (
-                    <label className="flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
                       <input
                         type="number"
                         min={0}
                         step="0.001"
-                        value={
-                          minimos[r.id] ??
-                          round3(
-                            stockToDisplay(r.stockMinimo, r.unidadMedida, r.unidadEtiqueta),
-                          )
-                        }
+                        value={minimos[r.id] ?? round3(r.minimoVisible)}
                         onChange={(e) =>
                           setMinimos((prev) => ({
                             ...prev,
                             [r.id]: Number(e.target.value),
                           }))
                         }
-                        className="w-24 rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
+                        className="w-20 rounded-md border border-fa-border bg-white px-2 py-1 text-fa-text"
                       />
-                      <span className="text-xs text-fa-muted">
-                        {etiquetaVista(
-                          tiposFila[r.id] ??
-                            tipoFromIngredient(r.unidadMedida, r.unidadEtiqueta),
-                          customFila[r.id] ??
-                            customFromIngredient(r.unidadMedida, r.unidadEtiqueta),
-                        )}
-                      </span>
-                    </label>
+                      <select
+                        value={tiposMinimoFila[r.id] ?? r.tipoMinimo}
+                        onChange={(e) =>
+                          setTiposMinimoFila((prev) => ({
+                            ...prev,
+                            [r.id]: e.target.value as TipoMinimo,
+                          }))
+                        }
+                        className="rounded-md border border-fa-border bg-white px-2 py-1 text-xs text-fa-text"
+                      >
+                        {TIPOS_MINIMO.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   ) : (
                     r.minimoEtiqueta
                   )}
@@ -985,7 +1027,11 @@ export function InventarioClient({
             {movimientosVisibles.map((m) => (
               <tr key={m.id} className="border-t border-fa-border">
                 <td className="px-3 py-2 text-fa-muted">{m.fecha}</td>
-                <td className="px-3 py-2">{TIPO_MOV[m.tipo]}</td>
+                <td className="px-3 py-2">
+                  {m.tipo === "VENTA" && m.nota?.startsWith("Anulación")
+                    ? "Anulación"
+                    : TIPO_MOV[m.tipo]}
+                </td>
                 <td className="px-3 py-2">
                   <span className="font-medium">{m.producto}</span>
                   {m.nota ? (

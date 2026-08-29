@@ -286,6 +286,36 @@ export function tipoMinimoDesdeEntrada(tipo: TipoEntrada): TipoMinimo {
   return "UNIDAD";
 }
 
+export function parseTipoMinimo(raw?: string | null): TipoMinimo | null {
+  if (raw === "ONZA" || raw === "LIBRA" || raw === "ITEM" || raw === "UNIDAD") {
+    return raw;
+  }
+  return null;
+}
+
+/** Unidad del mínimo tal como se guardó; si no hay dato, la del producto. */
+export function tipoMinimoGuardado(
+  stored: string | null | undefined,
+  unidad: UnidadInterna,
+  etiqueta?: string | null,
+): TipoMinimo {
+  return parseTipoMinimo(stored) ?? tipoMinimoDesdeEntrada(tipoFromIngredient(unidad, etiqueta));
+}
+
+/** Invierte minimoToStock: stock interno → valor visible del mínimo. */
+export function stockToMinimo(params: {
+  stockInterno: number;
+  tipoMinimo: TipoMinimo;
+  tipoEntrada: TipoEntrada;
+  unidadCustom?: string;
+  contenidoPorItem: number;
+}): number {
+  if (!(params.stockInterno > 0)) return 0;
+  const uno = minimoToStock({ ...params, valor: 1 });
+  if (!(uno > 0)) return 0;
+  return params.stockInterno / uno;
+}
+
 export function etiquetaMinimo(tipo: TipoMinimo): string {
   if (tipo === "ONZA") return "oz";
   if (tipo === "LIBRA") return "lb";

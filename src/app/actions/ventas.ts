@@ -2,8 +2,8 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { registerSaleItems } from "@/lib/inventory";
-import { canRegisterSales } from "@/lib/roles";
+import { registerSaleItems, voidSaleItem } from "@/lib/inventory";
+import { canRegisterSales, isAdmin } from "@/lib/roles";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -43,6 +43,31 @@ export async function registrarVentaAction(raw: unknown) {
     return { ok: true as const };
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo registrar";
+    return { ok: false as const, error: message };
+  }
+}
+
+export async function borrarVentaAction(raw: unknown) {
+  const session = await auth();
+  if (!session?.user || !isAdmin(session.user.role)) {
+    return { ok: false as const, error: "Solo la administradora puede borrar una venta" };
+  }
+  const parsed = z.object({ saleItemId: z.string().min(1) }).safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false as const, error: "Datos inválidos" };
+  }
+  try {
+    const result = await voidSaleItem({
+      saleItemId: parsed.data.saleItemId,
+      userId: session.user.id,
+    });
+    revalidatePath("/ventas");
+    revalidatePath("/inventario");
+    revalidatePath("/dashboard");
+    revalidatePath("/admin");
+    return { ok: true as const, ...result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No se pudo borrar";
     return { ok: false as const, error: message };
   }
 }

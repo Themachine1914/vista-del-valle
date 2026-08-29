@@ -80,6 +80,18 @@ export function valorAlPrecio(
   return display * unitario;
 }
 
+/** Consumo en dinero: la venta suma; la anulación resta. */
+export function valorConsumoMovimiento(
+  cantidadInterna: number,
+  unitario: number | null | undefined,
+  unidad: UnidadInterna,
+  etiqueta?: string | null,
+): number {
+  const v = valorAlPrecio(cantidadInterna, unitario, unidad, etiqueta);
+  if (v == null || cantidadInterna === 0) return 0;
+  return cantidadInterna < 0 ? v : -v;
+}
+
 export function comparacionVsAnterior(
   actual: MovimientoPrecio,
   historial: MovimientoPrecio[],

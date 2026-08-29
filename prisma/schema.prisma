@@ -87,6 +87,7 @@ model Ingredient {
   unidadMedida     UnidadMedida
   unidadEtiqueta   String               @default("")
   contenidoPorItem Decimal              @default(1)
+  tipoMinimo       String?
   stockActual      Decimal
   stockMinimo      Decimal
   recipeItems      RecipeIngredient[]

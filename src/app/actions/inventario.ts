@@ -9,6 +9,7 @@ import {
   etiquetaMinimo,
   etiquetaTipo,
   minimoToStock,
+  parseTipoMinimo,
   purchaseToStock,
   resolveEntrada,
   resolverContenidoPorItem,
@@ -195,6 +196,7 @@ export async function registrarCompraAction(raw: unknown) {
             unidadMedida: conv.unidadMedida,
             unidadEtiqueta: etiquetaUnidad,
             contenidoPorItem: data.contenidoPorItem,
+            tipoMinimo,
             stockActual: 0,
             stockMinimo: minimoInterno,
           },
@@ -245,6 +247,7 @@ export async function registrarCompraAction(raw: unknown) {
               unidadMedida: conv.unidadMedida,
               unidadEtiqueta: etiquetaUnidad,
               contenidoPorItem: data.contenidoPorItem,
+              tipoMinimo,
               stockActual: stockConvertido,
               stockMinimo: minimoInterno,
             },
@@ -265,6 +268,7 @@ export async function registrarCompraAction(raw: unknown) {
             data: {
               unidadEtiqueta: etiquetaUnidad,
               contenidoPorItem: data.contenidoPorItem,
+              tipoMinimo,
               stockMinimo: minimoInterno,
             },
           });
@@ -306,6 +310,8 @@ const renameSchema = z.object({
   nombre: z.string().min(1).max(80),
   tipoEntrada: z.enum(["LIBRA", "ONZA", "KILO", "LITRO", "ITEM", "UNIDAD", "OTRO"]),
   unidadCustom: z.string().max(24).optional(),
+  contenidoPorItem: z.coerce.number().positive(),
+  tipoMinimo: z.enum(["ONZA", "LIBRA", "ITEM", "UNIDAD"]).optional(),
   stockMinimo: z.coerce.number().min(0),
 });
 
@@ -326,16 +332,29 @@ export async function guardarProductoAction(raw: unknown) {
       where: { id: parsed.data.id },
     });
     if (!before) return { ok: false as const, error: "Producto no encontrado" };
-    const minimoInterno = displayToStock(
-      parsed.data.stockMinimo,
-      tipoNuevo,
-      parsed.data.unidadCustom,
-    );
+    const tipoMinimo = (parsed.data.tipoMinimo ?? "UNIDAD") as TipoMinimo;
+    const contenido = parsed.data.contenidoPorItem;
+    const minimoInterno = minimoToStock({
+      valor: parsed.data.stockMinimo,
+      tipoMinimo,
+      tipoEntrada: tipoNuevo,
+      unidadCustom: parsed.data.unidadCustom,
+      contenidoPorItem: contenido,
+    });
     const unidadCambia = before.unidadMedida !== resuelta.unidadMedida;
     const etiquetaCambia = before.unidadEtiqueta !== resuelta.etiqueta;
     const nombreCambia = before.nombre !== nombre;
     const minimoCambia = Number(before.stockMinimo) !== minimoInterno;
-    if (!unidadCambia && !etiquetaCambia && !nombreCambia && !minimoCambia) {
+    const contenidoCambia = Number(before.contenidoPorItem) !== contenido;
+    const tipoMinimoCambia = (parseTipoMinimo(before.tipoMinimo) ?? "") !== tipoMinimo;
+    if (
+      !unidadCambia &&
+      !etiquetaCambia &&
+      !nombreCambia &&
+      !minimoCambia &&
+      !contenidoCambia &&
+      !tipoMinimoCambia
+    ) {
       return { ok: true as const };
     }
     await prisma.$transaction(async (tx) => {
@@ -361,6 +380,8 @@ export async function guardarProductoAction(raw: unknown) {
           nombre,
           unidadMedida: resuelta.unidadMedida,
           unidadEtiqueta: resuelta.etiqueta,
+          contenidoPorItem: contenido,
+          tipoMinimo,
           stockMinimo: minimoInterno,
           stockActual,
         },
@@ -372,8 +393,11 @@ export async function guardarProductoAction(raw: unknown) {
           before.unidadEtiqueta || etiquetaTipo(tipoFromUnidad(before.unidadMedida));
         detalles.push(`Volumen: ${etiquetaVieja} → ${resuelta.etiqueta}`);
       }
+      if (contenidoCambia) {
+        detalles.push(`Envase: 1 unidad = ${contenido} ${resuelta.etiqueta}`);
+      }
       if (minimoCambia) {
-        detalles.push(`Mínimo: ${parsed.data.stockMinimo} ${resuelta.etiqueta}`);
+        detalles.push(`Mínimo: ${parsed.data.stockMinimo} ${etiquetaMinimo(tipoMinimo)}`);
       }
       await tx.inventoryAudit.create({
         data: {

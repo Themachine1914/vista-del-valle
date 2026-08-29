@@ -7,6 +7,7 @@ import {
   displayToStock,
   minimoToStock,
   purchaseToStock,
+  stockToMinimo,
   resolverContenidoPorItem,
   stockToDisplay,
   tipoFromIngredient,
@@ -181,6 +182,40 @@ describe("minimoToStock", () => {
         contenidoPorItem: 25,
       }),
     ).toBeCloseTo(25 * GRAMS_PER_LB, 5);
+  });
+
+  it("round-trips a 2-item minimum on an ounce product", () => {
+    const interno = minimoToStock({
+      valor: 2,
+      tipoMinimo: "ITEM",
+      tipoEntrada: "ONZA",
+      contenidoPorItem: 12,
+    });
+    expect(
+      stockToMinimo({
+        stockInterno: interno,
+        tipoMinimo: "ITEM",
+        tipoEntrada: "ONZA",
+        contenidoPorItem: 12,
+      }),
+    ).toBeCloseTo(2, 5);
+  });
+
+  it("round-trips a pound minimum", () => {
+    const interno = minimoToStock({
+      valor: 5,
+      tipoMinimo: "LIBRA",
+      tipoEntrada: "LIBRA",
+      contenidoPorItem: 25,
+    });
+    expect(
+      stockToMinimo({
+        stockInterno: interno,
+        tipoMinimo: "LIBRA",
+        tipoEntrada: "LIBRA",
+        contenidoPorItem: 25,
+      }),
+    ).toBeCloseTo(5, 5);
   });
 
   it("stores a unit minimum as units when the product is counted", () => {

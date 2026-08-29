@@ -6,6 +6,7 @@ import {
   etiquetaPrecioCompra,
   ultimasComprasPorProducto,
   valorAlPrecio,
+  valorConsumoMovimiento,
   type MovimientoPrecio,
 } from "./inventory-precio";
 
@@ -82,6 +83,16 @@ describe("valorAlPrecio", () => {
 
   it("returns null without a unit price", () => {
     expect(valorAlPrecio(50 * GRAMS_PER_LB, null, "G", "lb")).toBeNull();
+  });
+});
+
+describe("valorConsumoMovimiento", () => {
+  it("adds cost on a sale and subtracts it on a void", () => {
+    const sale = valorConsumoMovimiento(-8 * GRAMS_PER_LB, 24, "G", "lb");
+    const voided = valorConsumoMovimiento(8 * GRAMS_PER_LB, 24, "G", "lb");
+    expect(sale).toBeCloseTo(192, 5);
+    expect(voided).toBeCloseTo(-192, 5);
+    expect(sale + voided).toBeCloseTo(0, 5);
   });
 });
 

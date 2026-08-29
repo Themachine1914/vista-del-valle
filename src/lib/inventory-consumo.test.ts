@@ -18,6 +18,18 @@ describe("sumarConsumo", () => {
   it("ignores zero movements", () => {
     expect(sumarConsumo([{ ingredientId: "arroz", cantidad: 0 }])).toEqual({});
   });
+
+  it("cancels consumption when a sale is voided", () => {
+    expect(
+      sumarConsumo([
+        { ingredientId: "arroz", cantidad: -2267.96 },
+        { ingredientId: "arroz", cantidad: 2267.96 },
+        { ingredientId: "aceite", cantidad: -500 },
+      ]),
+    ).toEqual({
+      aceite: 500,
+    });
+  });
 });
 
 describe("coincideBusqueda", () => {

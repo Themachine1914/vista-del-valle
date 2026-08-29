@@ -25,13 +25,14 @@ export function computeDeductionQty(
   return new Prisma.Decimal(recipeQty).mul(factor);
 }
 
-async function deductRecipe(
+async function applyRecipeStock(
   tx: Tx,
   dishId: string,
   units: number,
   userId: string,
   nota: string,
   fecha: Date,
+  direction: "deduct" | "restore",
 ) {
   const recipe = await tx.recipe.findUnique({
     where: { dishId },
@@ -45,21 +46,33 @@ async function deductRecipe(
       recipe.porcionesQueRinde,
       units,
     );
+    const signed = direction === "deduct" ? qty.negated() : qty;
     await tx.ingredient.update({
       where: { id: line.ingredientId },
-      data: { stockActual: { decrement: qty } },
+      data: { stockActual: { increment: signed } },
     });
     await tx.inventoryMovement.create({
       data: {
         ingredientId: line.ingredientId,
         tipo: "VENTA",
-        cantidad: qty.negated(),
+        cantidad: signed,
         nota,
         userId,
         fecha,
       },
     });
   }
+}
+
+async function deductRecipe(
+  tx: Tx,
+  dishId: string,
+  units: number,
+  userId: string,
+  nota: string,
+  fecha: Date,
+) {
+  await applyRecipeStock(tx, dishId, units, userId, nota, fecha, "deduct");
 }
 
 export async function registerSaleItems(input: {
@@ -134,6 +147,51 @@ export async function registerSaleItems(input: {
     }
 
     return sale;
+  });
+}
+
+/** Quita una línea de venta y devuelve al stock lo que descontó la receta (plato + guarnición). */
+export async function voidSaleItem(input: { saleItemId: string; userId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const item = await tx.saleItem.findUnique({
+      where: { id: input.saleItemId },
+      include: {
+        dish: true,
+        garnish: true,
+        sale: true,
+      },
+    });
+    if (!item) {
+      throw new Error("Esa venta ya no está");
+    }
+
+    await applyRecipeStock(
+      tx,
+      item.dishId,
+      item.cantidad,
+      input.userId,
+      `Anulación: ${item.dish.nombre}`,
+      item.sale.fecha,
+      "restore",
+    );
+    if (item.garnishId) {
+      await applyRecipeStock(
+        tx,
+        item.garnishId,
+        item.cantidad,
+        input.userId,
+        `Anulación guarnición: ${item.garnish?.nombre ?? item.garnishId}`,
+        item.sale.fecha,
+        "restore",
+      );
+    }
+
+    await tx.saleItem.delete({ where: { id: item.id } });
+    const remaining = await tx.saleItem.count({ where: { saleId: item.saleId } });
+    if (remaining === 0) {
+      await tx.sale.delete({ where: { id: item.saleId } });
+    }
+    return { dishNombre: item.dish.nombre, cantidad: item.cantidad };
   });
 }
 

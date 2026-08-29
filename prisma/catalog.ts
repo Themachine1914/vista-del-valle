@@ -513,6 +513,7 @@ export const recipes: RecipeSeed[] = [
   { dishId: "arroz-blanco", minutos: 18, pasos: ["Cocer arroz"], items: [["arroz", 120]] },
   { dishId: "habichuelas", minutos: 40, pasos: ["Guisar habichuelas"], items: [["habichuelas", 100]] },
   { dishId: "guandules-guisados", minutos: 40, pasos: ["Guisar guandules"], items: [["guandules", 100]] },
+  { dishId: "tostones-cepa", minutos: 12, pasos: ["Cortar, freír y aplastar"], items: [["cepa-apio", 150]] },
   { dishId: "quesillo-coco", minutos: 50, pasos: ["Mezclar", "Hornear a baño maría", "Enfriar"], items: [["huevo", 2], ["leche", 150], ["azucar", 40], ["coco", 0.3]] },
   { dishId: "majarete", minutos: 40, pasos: ["Cocer maíz/coco con leche", "Endulzar"], items: [["maiz", 80], ["leche", 150], ["azucar", 40]] },
   { dishId: "dulce-coco", minutos: 30, pasos: ["Cocer coco con azúcar"], items: [["coco", 1], ["azucar", 50]] },

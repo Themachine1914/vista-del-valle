@@ -1,6 +1,6 @@
 "use client";
 
-import { registrarVentaAction } from "@/app/actions/ventas";
+import { borrarVentaAction, registrarVentaAction } from "@/app/actions/ventas";
 import { PeriodFilter } from "@/components/app/PeriodFilter";
 import { PdfDownload } from "@/components/app/PdfDownload";
 import { LiveRefresh } from "@/components/app/LiveRefresh";
@@ -126,6 +126,7 @@ export function VentasClient({
   unidadesPeriodo,
   desglose,
   recipesByDish,
+  canDelete,
 }: {
   fecha: string;
   turno: "DESAYUNO" | "ALMUERZO" | "CENA";
@@ -137,6 +138,7 @@ export function VentasClient({
   unidadesPeriodo: number;
   desglose: VentasDesglose[];
   recipesByDish: Record<string, DishRecipeInfo>;
+  canDelete: boolean;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -197,6 +199,26 @@ export function VentasClient({
       return;
     }
     setTicket([]);
+    router.refresh();
+  }
+
+  async function borrarLinea(line: SaleLine) {
+    const detalle = `${line.cantidad}× ${line.nombre}${line.garnish ? ` + ${line.garnish}` : ""}`;
+    if (
+      !window.confirm(
+        `¿Borrar ${detalle}? Se quita de las ventas y se devuelve al inventario lo que descontó.`,
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    const res = await borrarVentaAction({ saleItemId: line.id });
+    setPending(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
     router.refresh();
   }
 
@@ -480,7 +502,7 @@ export function VentasClient({
         ) : (
           <ul className="mt-2 space-y-1 text-sm">
             {lines.map((l) => (
-              <li key={l.id} className="flex justify-between gap-2">
+              <li key={l.id} className="flex items-start justify-between gap-2">
                 <span>
                   {l.cantidad}× {l.nombre}
                   {l.garnish ? ` + ${l.garnish}` : ""}
@@ -488,7 +510,19 @@ export function VentasClient({
                     <span className="block text-xs text-fa-muted">{l.camarero}</span>
                   ) : null}
                 </span>
-                <span>{formatRD(l.cantidad * l.precioUnitario)}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span>{formatRD(l.cantidad * l.precioUnitario)}</span>
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => void borrarLinea(l)}
+                      className="text-xs text-red-700 disabled:opacity-50"
+                    >
+                      Borrar
+                    </button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>

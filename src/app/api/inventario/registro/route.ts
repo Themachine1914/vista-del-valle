@@ -9,6 +9,7 @@ import {
   etiquetaPrecioCompra,
   ultimasComprasPorProducto,
   valorAlPrecio,
+  valorConsumoMovimiento,
   type MovimientoPrecio,
 } from "@/lib/inventory-precio";
 import { formatFechaCorta, formatRD, formatRDUnitario, formatStockCompra, toMoney } from "@/lib/money";
@@ -163,15 +164,16 @@ export async function GET(request: Request) {
     totalConsumo: formatRD(
       ventas.reduce((acc, m) => {
         const ultima = ultimas[m.ingredientId];
-        const v = ultima
-          ? valorAlPrecio(
-              toMoney(m.cantidad),
-              ultima.unitario,
-              m.ingredient.unidadMedida,
-              m.ingredient.unidadEtiqueta,
-            )
-          : null;
-        return acc + (v ?? 0);
+        if (!ultima) return acc;
+        return (
+          acc +
+          valorConsumoMovimiento(
+            toMoney(m.cantidad),
+            ultima.unitario,
+            m.ingredient.unidadMedida,
+            m.ingredient.unidadEtiqueta,
+          )
+        );
       }, 0),
     ),
     totalStock: formatRD(

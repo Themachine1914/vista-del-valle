@@ -10,11 +10,17 @@ import {
   etiquetaPrecioCompra,
   ultimasComprasPorProducto,
   valorAlPrecio,
+  valorConsumoMovimiento,
   type MovimientoPrecio,
 } from "@/lib/inventory-precio";
 import {
   etiquetaEnvase,
+  etiquetaMinimo,
   resolverContenidoPorItem,
+  stockToMinimo,
+  tipoFromIngredient,
+  tipoMinimoGuardado,
+  customFromIngredient,
 } from "@/lib/inventory-units";
 
 export const dynamic = "force-dynamic";
@@ -94,6 +100,15 @@ export default async function InventarioPage({
       toMoney(i.contenidoPorItem),
       ultimaNotaPorId.get(i.id),
     );
+    const tipoEntrada = tipoFromIngredient(i.unidadMedida, i.unidadEtiqueta);
+    const tipoMinimo = tipoMinimoGuardado(i.tipoMinimo, i.unidadMedida, i.unidadEtiqueta);
+    const minimoVisible = stockToMinimo({
+      stockInterno: toMoney(i.stockMinimo),
+      tipoMinimo,
+      tipoEntrada,
+      unidadCustom: customFromIngredient(i.unidadMedida, i.unidadEtiqueta),
+      contenidoPorItem,
+    });
     const valorStock = ultima
       ? valorAlPrecio(stockNum, ultima.unitario, i.unidadMedida, i.unidadEtiqueta)
       : null;
@@ -106,12 +121,17 @@ export default async function InventarioPage({
       unidadMedida: i.unidadMedida,
       unidadEtiqueta: i.unidadEtiqueta,
       contenidoPorItem,
+      tipoMinimo,
       envaseEtiqueta: etiquetaEnvase(contenidoPorItem, i.unidadMedida, i.unidadEtiqueta),
       stockActual: stockNum,
       stockMinimo: toMoney(i.stockMinimo),
+      minimoVisible,
       bajo: stockNum < toMoney(i.stockMinimo),
       etiqueta: formatStockCompra(i.stockActual, i.unidadMedida, i.unidadEtiqueta),
-      minimoEtiqueta: formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
+      minimoEtiqueta:
+        minimoVisible > 0
+          ? `${minimoVisible} ${etiquetaMinimo(tipoMinimo)}`
+          : formatStockCompra(i.stockMinimo, i.unidadMedida, i.unidadEtiqueta),
       consumo,
       consumoEtiqueta:
         consumo > 0
@@ -139,15 +159,16 @@ export default async function InventarioPage({
   }, 0);
   const valorConsumo = ventas.reduce((acc, m) => {
     const ultima = ultimas[m.ingredientId];
-    const v = ultima
-      ? valorAlPrecio(
-          toMoney(m.cantidad),
-          ultima.unitario,
-          m.ingredient.unidadMedida,
-          m.ingredient.unidadEtiqueta,
-        )
-      : null;
-    return acc + (v ?? 0);
+    if (!ultima) return acc;
+    return (
+      acc +
+      valorConsumoMovimiento(
+        toMoney(m.cantidad),
+        ultima.unitario,
+        m.ingredient.unidadMedida,
+        m.ingredient.unidadEtiqueta,
+      )
+    );
   }, 0);
   const valorStock = ingredients.reduce((acc, i) => {
     const ultima = ultimas[i.id];

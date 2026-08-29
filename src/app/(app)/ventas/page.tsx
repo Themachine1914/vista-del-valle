@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { toMoney } from "@/lib/money";
 import { parsePeriodo, type PeriodoFiltro } from "@/lib/period";
-import { canRegisterSales, homeForRole } from "@/lib/roles";
+import { canRegisterSales, homeForRole, isAdmin } from "@/lib/roles";
 import { redirect } from "next/navigation";
 import {
   VentasClient,
@@ -163,6 +163,7 @@ export default async function VentasPage({
       unidadesPeriodo={unidadesPeriodo}
       desglose={desglose}
       recipesByDish={recipesByDish}
+      canDelete={isAdmin(session.user.role)}
     />
   );
 }

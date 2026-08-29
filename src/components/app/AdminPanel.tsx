@@ -10,7 +10,9 @@ import {
   updateIngredientAction,
   uploadDishPhotoAction,
 } from "@/app/actions/admin";
+import { borrarVentaAction } from "@/app/actions/ventas";
 import { formatRD } from "@/lib/money";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Cat = {
@@ -46,21 +48,38 @@ type Rec = {
   pasos: string[];
   items: { ingredientId: string; cantidad: number }[];
 };
+type VentaAdmin = {
+  id: string;
+  fecha: string;
+  turno: "DESAYUNO" | "ALMUERZO" | "CENA";
+  nombre: string;
+  garnish: string | null;
+  cantidad: number;
+  total: number;
+  camarero: string | null;
+};
 
 export function AdminPanel({
   categories,
   dishes,
   ingredients,
   recipes,
+  ventas,
+  ventasFecha,
+  initialTab,
 }: {
   categories: Cat[];
   dishes: Dish[];
   ingredients: Ing[];
   recipes: Rec[];
+  ventas: VentaAdmin[];
+  ventasFecha: string;
+  initialTab: "platos" | "ventas";
 }) {
-  const [tab, setTab] = useState<"platos" | "ingredientes" | "categorias" | "recetas">(
-    "platos",
-  );
+  const router = useRouter();
+  const [tab, setTab] = useState<
+    "platos" | "ingredientes" | "categorias" | "recetas" | "ventas"
+  >(initialTab);
 
   return (
     <div>
@@ -72,12 +91,18 @@ export function AdminPanel({
             ["ingredientes", "Ingredientes"],
             ["categorias", "Categorías"],
             ["recetas", "Recetas"],
+            ["ventas", "Ventas"],
           ] as const
         ).map(([id, label]) => (
           <button
             key={id}
             type="button"
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id);
+              if (id === "ventas") {
+                router.replace(`/admin?tab=ventas&ventasFecha=${ventasFecha}`);
+              }
+            }}
             className={`rounded-[10px] px-3 py-1.5 text-sm ${
               tab === id ? "bg-fa-primary text-white" : "border border-fa-border"
             }`}
@@ -95,6 +120,129 @@ export function AdminPanel({
         {tab === "recetas" ? (
           <Recetas dishes={dishes} ingredients={ingredients} recipes={recipes} />
         ) : null}
+        {tab === "ventas" ? (
+          <VentasAdmin ventas={ventas} ventasFecha={ventasFecha} />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const TURNO_LABEL: Record<VentaAdmin["turno"], string> = {
+  DESAYUNO: "Desayuno",
+  ALMUERZO: "Almuerzo",
+  CENA: "Cena",
+};
+
+function VentasAdmin({
+  ventas,
+  ventasFecha,
+}: {
+  ventas: VentaAdmin[];
+  ventasFecha: string;
+}) {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const visible = ventas.filter((v) => {
+    const hay = `${v.nombre} ${v.garnish ?? ""} ${v.camarero ?? ""}`.toLowerCase();
+    return hay.includes(q.toLowerCase());
+  });
+
+  async function borrar(v: VentaAdmin) {
+    const detalle = `${v.cantidad}× ${v.nombre}${v.garnish ? ` + ${v.garnish}` : ""}`;
+    if (
+      !window.confirm(
+        `¿Borrar ${detalle} del ${v.fecha}? Se quita de las ventas y se devuelve al inventario.`,
+      )
+    ) {
+      return;
+    }
+    setPending(v.id);
+    setMsg(null);
+    const res = await borrarVentaAction({ saleItemId: v.id });
+    setPending(null);
+    if (!res.ok) {
+      setMsg(res.error);
+      return;
+    }
+    setMsg(`Borrada: ${detalle}. Inventario repuesto.`);
+    router.refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-fa-muted">
+        Borra una venta registrada por error. El plato y la guarnición vuelven al inventario.
+        También puedes borrar desde Ventas eligiendo el día.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar plato, guarnición o camarero…"
+          className="w-full max-w-xs rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+        />
+        <input
+          type="date"
+          value={ventasFecha}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (!next) return;
+            router.push(`/admin?tab=ventas&ventasFecha=${next}`);
+          }}
+          className="rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+        />
+      </div>
+      {msg ? <p className="text-sm text-fa-muted">{msg}</p> : null}
+      <div className="overflow-x-auto rounded-[10px] border border-fa-border bg-fa-surface">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-fa-bg text-fa-muted">
+            <tr>
+              <th className="px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Turno</th>
+              <th className="px-3 py-2">Venta</th>
+              <th className="px-3 py-2">Total</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((v) => (
+              <tr key={v.id} className="border-t border-fa-border">
+                <td className="px-3 py-2 whitespace-nowrap">{v.fecha}</td>
+                <td className="px-3 py-2">{TURNO_LABEL[v.turno]}</td>
+                <td className="px-3 py-2">
+                  {v.cantidad}× {v.nombre}
+                  {v.garnish ? ` + ${v.garnish}` : ""}
+                  {v.camarero ? (
+                    <span className="block text-xs text-fa-muted">{v.camarero}</span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-2">{formatRD(v.total)}</td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    disabled={pending === v.id}
+                    onClick={() => void borrar(v)}
+                    className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+                  >
+                    Borrar
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {visible.length === 0 ? (
+              <tr>
+                <td className="px-3 py-6 text-fa-muted" colSpan={5}>
+                  No hay ventas con ese filtro.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </div>
     </div>
   );

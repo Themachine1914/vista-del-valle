@@ -1,12 +1,15 @@
-/** Suma salidas de venta (cantidades negativas) por producto. */
+/** Consumo neto: venta resta (cantidad negativa), anulación devuelve (positiva). */
 export function sumarConsumo(
   movimientos: { ingredientId: string; cantidad: number }[],
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const m of movimientos) {
-    const qty = Math.abs(m.cantidad);
-    if (!(qty > 0)) continue;
+    const qty = -m.cantidad;
+    if (!(qty > 0) && !(qty < 0)) continue;
     out[m.ingredientId] = (out[m.ingredientId] ?? 0) + qty;
+  }
+  for (const id of Object.keys(out)) {
+    if (!(out[id] > 0)) delete out[id];
   }
   return out;
 }
