@@ -452,6 +452,12 @@ export function InventarioClient({
             apiPath="/api/inventario/registro"
             periodo={periodo}
           />
+          <a
+            href="/api/inventario/reposicion"
+            className="rounded-[10px] bg-fa-accent px-3 py-2 text-sm font-medium text-white"
+          >
+            Lista de reposición
+          </a>
         </div>
       </div>
 

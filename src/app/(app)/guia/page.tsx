@@ -97,6 +97,14 @@ const SECTIONS: Section[] = [
           "Imprimir registro PDF descarga el reporte completo del período elegido.",
         ],
       },
+      {
+        titulo: "Lista de reposición",
+        puntos: [
+          "Genera un PDF con todo lo que está agotado o por debajo del mínimo — incluye ingredientes de recetas y también materiales que no están en ninguna receta (gastables), porque un producto no necesita estar en una receta para aparecer en Inventario.",
+          "Por cada producto muestra cuánto falta para llegar al mínimo y el costo aproximado, calculado con el precio de la última compra registrada.",
+          "Si un producto nunca se ha comprado (sin precio registrado), aparece en la lista pero no se suma al total — el PDF avisa cuántos quedaron fuera del total por esa razón.",
+        ],
+      },
     ],
   },
   {
