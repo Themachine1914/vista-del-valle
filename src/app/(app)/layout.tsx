@@ -10,11 +10,16 @@ const LINKS = {
     { href: "/inventario", label: "Inventario" },
     { href: "/cocina", label: "Cocina" },
     { href: "/admin", label: "Admin" },
+    { href: "/guia", label: "Guía" },
   ],
-  CAMARERO: [{ href: "/ventas", label: "Ventas" }],
+  CAMARERO: [
+    { href: "/ventas", label: "Ventas" },
+    { href: "/guia", label: "Guía" },
+  ],
   COCINA: [
     { href: "/cocina", label: "Cocina" },
     { href: "/inventario", label: "Inventario" },
+    { href: "/guia", label: "Guía" },
   ],
 } as const;
 
