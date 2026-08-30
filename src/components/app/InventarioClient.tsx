@@ -482,7 +482,8 @@ export function InventarioClient({
       {canAdjust ? (
         <div className="space-y-4">
           <form
-            className="grid gap-3 rounded-[10px] border border-fa-border bg-fa-surface p-4 sm:grid-cols-2 lg:grid-cols-4"
+            id="form-registrar-compra"
+            className="grid scroll-mt-20 gap-3 rounded-[10px] border border-fa-border bg-fa-surface p-4 sm:grid-cols-2 lg:grid-cols-4"
             onSubmit={(e) => {
               e.preventDefault();
               void registrar();
@@ -981,6 +982,21 @@ export function InventarioClient({
                 {canAdjust ? (
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-2">
+                      {r.bajo ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModo("existente");
+                            setSel(r.id);
+                            document
+                              .getElementById("form-registrar-compra")
+                              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="rounded-md bg-fa-accent px-2 py-1 text-xs text-white"
+                        >
+                          Registrar compra
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => void guardar(r.id)}
