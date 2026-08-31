@@ -4,11 +4,10 @@ App web del restaurante **Vista del Valle** (Casabito, República Dominicana): c
 
 ## Arranque local
 
-1. Crea un proyecto en [supabase.com](https://supabase.com) (región cercana).
-2. Copia `.env.example` a `.env` y pega las claves:
-   - **DATABASE_URL** — Connect → *Transaction pooler* (puerto `6543`), con `?pgbouncer=true`
-   - **DIRECT_URL** — Connect → *Session pooler* o conexión directa (puerto `5432`)
-   - **NEXT_PUBLIC_SUPABASE_URL**, **NEXT_PUBLIC_SUPABASE_ANON_KEY**, **SUPABASE_SERVICE_ROLE_KEY** — Settings → API
+El proyecto de Supabase ya está creado: [Vista del Valle](https://tdoeqgyxjdpxmghuirox.supabase.co) (`us-west-2`).
+
+1. Copia `.env.example` a `.env` y sustituye `[YOUR-PASSWORD]` por la contraseña de **Project Settings → Database**.
+2. Pega `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable) y `SUPABASE_SERVICE_ROLE_KEY` desde **Settings → API Keys**.
 3. Genera `AUTH_SECRET` con `openssl rand -base64 32`.
 4. Instala, empuja el esquema y carga el seed:
 
