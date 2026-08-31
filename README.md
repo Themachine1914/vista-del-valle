@@ -38,7 +38,7 @@ Abre [http://localhost:3000](http://localhost:3000).
 
 El seed carga el menú del PDF, ingredientes, recetas estimadas (el chef debe calibrarlas) y las unidades vendidas de junio–julio 2026 repartidas en 61 días.
 
-Pendiente con el restaurante: precios de bebidas y guarniciones, recetas de cócteles, conteo físico de stock.
+Pendiente con el restaurante: precios de jugos, cafés, cervezas, cócteles y refrescos; precios de guarniciones si se venden sueltas; recetas de cócteles; conteo físico de stock. Vinos y tragos ya salen de la carta impresa.
 
 ## Fotos
 
