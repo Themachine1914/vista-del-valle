@@ -163,13 +163,15 @@ async function main() {
       const missing = recipe.items.filter(([id]) => !ingredientIds.has(id));
       throw new Error(`Ingrediente faltante en ${recipe.dishId}: ${missing.map((m) => m[0]).join(", ")}`);
     }
-    await prisma.recipeIngredient.createMany({
-      data: lines.map(([ingredientId, cantidad]) => ({
-        recipeId: created.id,
-        ingredientId,
-        cantidad,
-      })),
-    });
+    if (lines.length) {
+      await prisma.recipeIngredient.createMany({
+        data: lines.map(([ingredientId, cantidad]) => ({
+          recipeId: created.id,
+          ingredientId,
+          cantidad,
+        })),
+      });
+    }
   }
 
   const days = eachDay(

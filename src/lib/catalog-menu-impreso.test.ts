@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dishes } from "../../prisma/catalog";
+import { categories, dishes } from "../../prisma/catalog";
 
 const byId = Object.fromEntries(dishes.map((d) => [d.id, d]));
 
@@ -35,5 +35,23 @@ describe("menú impreso Vista del Valle", () => {
     expect(byId.cointreau?.precio).toBe(395);
     expect(byId.ginebra?.nombre).toBe("Beefeater");
     expect(byId.ginebra?.precio).toBe(285);
+  });
+
+  it("keeps kitchen sauces off the public menu", () => {
+    const salsas = categories.find((c) => c.id === "salsas");
+    expect(salsas?.esInterna).toBe(true);
+    for (const id of [
+      "salsa-de-tamarindo",
+      "salsa-del-bosque",
+      "salsa-al-ajillo",
+      "salsa-pomodoro",
+      "salsa-alfredo-blanca",
+      "salsa-romero",
+      "salsa-del-rey",
+      "salsa-blue-cheese",
+    ]) {
+      expect(byId[id]?.categoryId).toBe("salsas");
+      expect(byId[id]?.precio ?? null).toBeNull();
+    }
   });
 });

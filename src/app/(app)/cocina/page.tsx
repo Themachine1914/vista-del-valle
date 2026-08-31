@@ -17,7 +17,7 @@ export default async function CocinaPage() {
     <div>
       <h1 className="text-2xl font-semibold text-fa-primary">Recetas</h1>
       <p className="mt-1 text-sm text-fa-muted">
-        Vista de cocina. Abre un plato para ver pasos y escalar porciones.
+        Vista de cocina. Abre un plato o una salsa madre para ver pasos y escalar el lote.
       </p>
       <ul className="mt-6 divide-y divide-fa-border rounded-[10px] border border-fa-border bg-fa-surface">
         {recipes.map((r) => (

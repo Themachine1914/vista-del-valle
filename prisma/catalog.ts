@@ -21,6 +21,7 @@ export const categories = [
   { id: "ninos", nombre: "Para Niños", tipo: "BEBIDA" as const, esInterna: false, orden: 18 },
   { id: "vinos", nombre: "Vinos", tipo: "BEBIDA" as const, esInterna: false, orden: 19 },
   { id: "licores", nombre: "Tragos", tipo: "BEBIDA" as const, esInterna: false, orden: 20 },
+  { id: "salsas", nombre: "Salsas de cocina", tipo: "COMIDA" as const, esInterna: true, orden: 89 },
   { id: "emp-comida", nombre: "Comida Empleados", tipo: "COMIDA" as const, esInterna: true, orden: 90 },
   { id: "emp-bebida", nombre: "Consumo Empleados", tipo: "BEBIDA" as const, esInterna: true, orden: 91 },
   { id: "huespedes", nombre: "Huéspedes", tipo: "COMIDA" as const, esInterna: true, orden: 92 },
@@ -369,6 +370,14 @@ export const dishes: DishSeed[] = [
   { id: "extra-pollo", nombre: "Extra Pollo", categoryId: "extras" },
   { id: "extra-salami", nombre: "Salami Extra", categoryId: "extras" },
   { id: "salsa-crema", nombre: "Salsa a la Crema", categoryId: "extras" },
+  { id: "salsa-de-tamarindo", nombre: "Salsa de tamarindo", categoryId: "salsas", descripcion: "Lote de 1 galón. Se usa en el bistec encebollado." },
+  { id: "salsa-del-bosque", nombre: "Salsa del Bosque", categoryId: "salsas", descripcion: "Base de la salsa al ajillo. Se usa en salmón, arroz con mariscos y asopaos." },
+  { id: "salsa-al-ajillo", nombre: "Salsa al ajillo", categoryId: "salsas", descripcion: "Se arma con salsa del Bosque, ajo y vino. Canastitas de camarones." },
+  { id: "salsa-pomodoro", nombre: "Salsa Pomodoro", categoryId: "salsas", descripcion: "Lote de 1 galón. Pastas y asopaos." },
+  { id: "salsa-alfredo-blanca", nombre: "Salsa Alfredo blanca", categoryId: "salsas", descripcion: "1 galón rinde 18 pastas o 26 pechugas a la crema. El cuaderno no lista los ingredientes." },
+  { id: "salsa-romero", nombre: "Salsa de romero", categoryId: "salsas", descripcion: "Se hace al instante para el conejo: vino, romero y salsa china." },
+  { id: "salsa-del-rey", nombre: "Salsa del Rey", categoryId: "salsas", descripcion: "Pechuga a la parrilla. El cuaderno lista los ingredientes, no las cantidades del lote." },
+  { id: "salsa-blue-cheese", nombre: "Salsa blue cheese", categoryId: "salsas", descripcion: "Filete de res en queso azul." },
   { id: "vaso-plastico", nombre: "Vaso Plástico", categoryId: "extras" },
   { id: "b52", nombre: "B-52", categoryId: "extras" },
   { id: "descorche", nombre: "Descorche", categoryId: "extras" },
@@ -496,6 +505,14 @@ export const ingredients: { id: string; nombre: string; unidad: Unidad; minimo: 
   { id: "salsa-al-ajillo", nombre: "Salsa al ajillo", unidad: "ML", minimo: 1000 },
   { id: "salsa-del-rey", nombre: "Salsa del Rey", unidad: "ML", minimo: 1000 },
   { id: "salsa-blue-cheese", nombre: "Salsa blue cheese", unidad: "ML", minimo: 1000 },
+  { id: "salsa-romero", nombre: "Salsa de romero", unidad: "ML", minimo: 250 },
+  { id: "caja-calamar", nombre: "Caja de calamar", unidad: "UD", minimo: 2 },
+  { id: "mar-completo", nombre: "Mar completo", unidad: "G", minimo: 100 },
+  { id: "sopita", nombre: "Sopita / cubito", unidad: "UD", minimo: 20 },
+  { id: "sazon-goya", nombre: "Sazón Goya (sobre)", unidad: "UD", minimo: 10 },
+  { id: "recorte-marisco", nombre: "Recorte de marisco", unidad: "UD", minimo: 5 },
+  { id: "lata-tomate-pomodoro", nombre: "Lata de tomate pomodoro", unidad: "UD", minimo: 4 },
+  { id: "aji-habanero", nombre: "Ají habanero", unidad: "UD", minimo: 10 },
 ];
 
 export type RecipeSeed = {
@@ -505,13 +522,22 @@ export type RecipeSeed = {
   items: [string, number][];
 };
 
-/** Recetas del cuaderno de cocina. Ningún otro plato debe tener receta. */
+/** Recetas del cuaderno: platos, guarniciones y salsas madre. Ningún otro plato debe tener receta. */
 export const recipes: RecipeSeed[] = [
   { dishId: "tostones", minutos: 10, pasos: ["Freír, aplastar, volver a freír — 1 tostón por plato"], items: [["platano-verde", 1]] },
   { dishId: "casabe", minutos: 5, pasos: ["Tostar 1 lonja"], items: [["casabe", 60]] },
   { dishId: "papas-fritas", minutos: 12, pasos: ["Cortar y freír — 0.65 lb por servicio"], items: [["papa", 295]] },
   { dishId: "papas-salteadas", minutos: 12, pasos: ["Saltear 2 papas de tamaño normal"], items: [["papa", 300]] },
   { dishId: "aguacate", minutos: 2, pasos: ["Un aguacate rinde 2 servicios"], items: [["aguacate", 0.5]] },
+
+  { dishId: "salsa-de-tamarindo", minutos: 40, pasos: ["Rinde 1 galón", "1 paquete de tamarindo de 2 lb", "3 cucharadas de mostaza Dijon", "3 cabezas de ajo", "2 cucharadas de sal", "1/2 cucharada de pimienta", "1 porción de salsa china", "1 toque de vino", "Se usa en el bistec encebollado (4 oz por plato)"], items: [["tamarindo", 907], ["mostaza", 45], ["ajo", 120], ["sal", 30], ["pimienta", 3], ["salsa-china", 15], ["vino-tinto", 30]] },
+  { dishId: "salsa-del-bosque", minutos: 45, pasos: ["Base de la salsa al ajillo y de salmón, arroz y asopaos", "1 caja de calamar", "1 cucharada de mar completo", "2 mejillones", "Recorte de marisco", "2 cebollas", "2 cabezas de ajo", "2 cucharadas de sal", "1 cucharada de pimienta", "2 sopitas", "1 sobre de sazón Goya", "3 oz de harina"], items: [["caja-calamar", 1], ["mar-completo", 8], ["mejillones", 80], ["recorte-marisco", 1], ["cebolla", 300], ["ajo", 80], ["sal", 30], ["pimienta", 6], ["sopita", 2], ["sazon-goya", 1], ["harina", 85]] },
+  { dishId: "salsa-al-ajillo", minutos: 10, pasos: ["Se arma a partir de la salsa del Bosque", "4 oz de salsa del Bosque", "3 granos de ajo", "Toque de vino", "Canastitas de camarones llevan 2 oz"], items: [["salsa-del-bosque", 113], ["ajo", 10], ["vino-tinto", 30]] },
+  { dishId: "salsa-pomodoro", minutos: 35, pasos: ["Rinde 1 galón", "1 lata de tomate pomodoro", "1/2 paquete de albahaca", "6 oz de aceite de oliva", "2 cucharadas de sal", "1/2 cucharada de pimienta", "2 cabezas de ajo", "Pastas y asopaos (4 oz por plato)"], items: [["lata-tomate-pomodoro", 1], ["albahaca", 50], ["aceite-oliva", 177], ["sal", 30], ["pimienta", 3], ["ajo", 80]] },
+  { dishId: "salsa-alfredo-blanca", minutos: 30, pasos: ["Rinde 1 galón", "Ese galón alcanza para 18 pastas o 26 pechugas a la crema", "El cuaderno no lista los ingredientes de esta salsa"], items: [] },
+  { dishId: "salsa-romero", minutos: 5, pasos: ["Se hace al instante, no es un lote", "Toque de vino", "1 rama de romero", "Salsa china", "Solo se usa en el conejo"], items: [["vino-tinto", 30], ["romero", 3], ["salsa-china", 10]] },
+  { dishId: "salsa-del-rey", minutos: 15, pasos: ["Morrón, cebolla, ají habanero, parmesano rallado y vino", "El cuaderno no trae cantidades del lote", "Se usa en la pechuga a la parrilla terminada en Salsa del Rey"], items: [["pimiento", 80], ["cebolla", 150], ["aji-habanero", 1], ["parmesano", 30], ["vino-tinto", 30]] },
+  { dishId: "salsa-blue-cheese", minutos: 10, pasos: ["Blue cheese / queso azul", "El cuaderno no trae cantidades del lote", "Se usa en el filete de res en queso azul"], items: [["queso-azul", 113]] },
 
   { dishId: "bistec-encebollado", minutos: 25, pasos: ["Sellar 8 oz de bistec", "Saltear 1 cebolla mediana", "Napar con 4 oz de salsa de tamarindo"], items: [["bistec-res", 227], ["cebolla", 150], ["salsa-de-tamarindo", 113], ["aceite-crisol", 28]] },
   { dishId: "arroz-mariscos", minutos: 35, pasos: ["Sofrito de morrón y cebolla", "Cocer 1/4 lb de arroz con 4 oz de salsa del Bosque", "Agregar 4 camarones y recorte de marisco"], items: [["arroz", 113], ["salsa-del-bosque", 113], ["camarones", 42], ["mix-mariscos", 85], ["aceite-crisol", 28], ["pimiento", 30], ["cebolla", 30]] },
@@ -528,8 +554,8 @@ export const recipes: RecipeSeed[] = [
   { dishId: "filete-res-queso-azul", minutos: 25, pasos: ["Grillar 8 oz de res con ajo, sal y pimienta", "Napar con salsa blue cheese"], items: [["filete-res", 227], ["salsa-blue-cheese", 113], ["ajo", 5], ["sal", 3], ["pimienta", 1]] },
   { dishId: "filete-res-parrilla", minutos: 20, pasos: ["Igual que el filete en blue cheese", "La diferencia es salsa chimichurri (aún pendiente de receta)"], items: [["filete-res", 227], ["ajo", 5], ["sal", 3], ["pimienta", 1]] },
   { dishId: "pechuga-crema", minutos: 20, pasos: ["Grillar 8 oz de pechuga con ajo, sal, pimienta, orégano y mostaza", "Napar con salsa Alfredo (1 galón rinde 26 pechugas)"], items: [["pechuga", 227], ["salsa-alfredo-blanca", 146], ["ajo", 5], ["sal", 3], ["pimienta", 1], ["oregano", 2], ["mostaza", 5]] },
-  { dishId: "pechuga-salsa-rey", minutos: 25, pasos: ["Grillar 8 oz de pechuga", "Salsa del Rey: morrón, cebolla, ají habanero, parmesano rallado y vino"], items: [["pechuga", 227], ["salsa-del-rey", 113], ["pimiento", 30], ["cebolla", 30], ["parmesano", 10]] },
-  { dishId: "conejo", minutos: 50, pasos: ["Porción de conejo pendiente de confirmar — se usa 8 oz como los filetes", "Salsa de romero al instante: toque de vino + 1 rama de romero + salsa china"], items: [["conejo", 227], ["romero", 3], ["salsa-china", 10], ["salsa-alfredo-blanca", 113]] },
+  { dishId: "pechuga-salsa-rey", minutos: 25, pasos: ["Grillar 8 oz de pechuga", "Napar con salsa del Rey"], items: [["pechuga", 227], ["salsa-del-rey", 113]] },
+  { dishId: "conejo", minutos: 50, pasos: ["Porción de conejo pendiente de confirmar — se usa 8 oz como los filetes", "Napar con salsa de romero (se hace al instante)"], items: [["conejo", 227], ["salsa-romero", 43]] },
 ];
 
 /** Unidades vendidas 1 jun – 31 jul 2026 (reporte POS). */

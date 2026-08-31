@@ -1,15 +1,62 @@
 /**
  * Deja en la base SOLO las recetas del cuaderno (prisma/catalog.ts).
- * Crea salsas/aceite si faltan. No toca ventas ni stock.
+ * Crea categoría/platos de salsas e ingredientes si faltan. No toca ventas ni stock.
  *
  *   npx tsx scripts/sync-recetas-cuaderno.ts
  */
 import { PrismaClient } from "@prisma/client";
-import { ingredients, recipes } from "../prisma/catalog";
+import { categories, dishes, ingredients, recipes } from "../prisma/catalog";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const keep = new Set(recipes.map((r) => r.dishId));
+  const neededDishIds = [...keep];
+  const catalogDishes = dishes.filter((d) => keep.has(d.id));
+  const neededCategoryIds = new Set(catalogDishes.map((d) => d.categoryId));
+
+  for (const cat of categories.filter((c) => neededCategoryIds.has(c.id))) {
+    await prisma.category.upsert({
+      where: { id: cat.id },
+      create: {
+        id: cat.id,
+        nombre: cat.nombre,
+        tipo: cat.tipo,
+        esInterna: cat.esInterna,
+        orden: cat.orden,
+      },
+      update: {
+        nombre: cat.nombre,
+        tipo: cat.tipo,
+        esInterna: cat.esInterna,
+        orden: cat.orden,
+      },
+    });
+  }
+
+  for (const d of catalogDishes) {
+    await prisma.dish.upsert({
+      where: { id: d.id },
+      create: {
+        id: d.id,
+        nombre: d.nombre,
+        descripcion: d.descripcion,
+        precio: d.precio ?? null,
+        categoryId: d.categoryId,
+        destacado: Boolean(d.destacado),
+        incluyeGuarnicion: Boolean(d.incluyeGuarnicion),
+      },
+      update: {
+        nombre: d.nombre,
+        descripcion: d.descripcion,
+        categoryId: d.categoryId,
+      },
+    });
+  }
+  if (neededDishIds.length) {
+    console.log("Platos de receta al día:", neededDishIds.length);
+  }
+
   const neededIds = new Set(recipes.flatMap((r) => r.items.map(([id]) => id)));
   const existing = await prisma.ingredient.findMany({ select: { id: true } });
   const have = new Set(existing.map((i) => i.id));
@@ -27,7 +74,6 @@ async function main() {
     console.log("Ingredientes creados:", missing.map((i) => i.nombre).join(", "));
   }
 
-  const keep = new Set(recipes.map((r) => r.dishId));
   const current = await prisma.recipe.findMany({ select: { id: true, dishId: true } });
   const extra = current.filter((r) => !keep.has(r.dishId));
   if (extra.length) {
@@ -65,13 +111,15 @@ async function main() {
       });
     }
     await prisma.recipeIngredient.deleteMany({ where: { recipeId } });
-    await prisma.recipeIngredient.createMany({
-      data: rec.items.map(([ingredientId, cantidad]) => ({
-        recipeId,
-        ingredientId,
-        cantidad,
-      })),
-    });
+    if (rec.items.length) {
+      await prisma.recipeIngredient.createMany({
+        data: rec.items.map(([ingredientId, cantidad]) => ({
+          recipeId,
+          ingredientId,
+          cantidad,
+        })),
+      });
+    }
     console.log("OK", dish.nombre);
   }
 
