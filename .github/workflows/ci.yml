@@ -19,6 +19,9 @@ jobs:
 
       - run: npm ci
 
+      # .npmrc sets ignore-scripts=true, so postinstall (prisma generate) is skipped.
+      - run: npx prisma generate
+
       - run: npm run lint
 
       - run: npx tsc --noEmit
