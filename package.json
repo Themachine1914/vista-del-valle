@@ -15,6 +15,7 @@
     "db:storage": "tsx scripts/setup-supabase-storage.ts",
     "db:setup": "prisma db push && tsx prisma/seed.ts && tsx scripts/setup-supabase-storage.ts",
     "db:studio": "prisma studio",
+    "docs:recetas-faltantes": "tsx scripts/generar-recetas-faltantes.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
