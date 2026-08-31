@@ -12,7 +12,8 @@
     "db:down": "docker compose down",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:setup": "docker compose up -d && prisma db push && tsx prisma/seed.ts",
+    "db:storage": "tsx scripts/setup-supabase-storage.ts",
+    "db:setup": "prisma db push && tsx prisma/seed.ts && tsx scripts/setup-supabase-storage.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },
@@ -22,6 +23,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
     "@prisma/client": "^6.14.0",
+    "@supabase/supabase-js": "^2.112.4",
     "bcryptjs": "^3.0.2",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

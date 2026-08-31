@@ -1,3 +1,5 @@
+# Optional local Postgres when you are not using a hosted Supabase project.
+# Point DATABASE_URL and DIRECT_URL at this instance (see .env.example).
 services:
   db:
     image: postgres:16-alpine

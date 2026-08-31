@@ -157,7 +157,7 @@ const SECTIONS: Section[] = [
         puntos: [
           "El formulario de arriba crea un plato nuevo: el id va en minúsculas y con guiones, sin espacios ni tildes (por ejemplo “pollo-guisado”); si dejas el precio vacío, el plato queda oculto en la carta pública.",
           "Cada plato de la lista se edita en su propia tarjeta: nombre, precio, descripción, y las casillas Disponible, Favorito e Incluye guarnición. Pulsa Guardar en esa tarjeta para aplicar los cambios.",
-          "Subir foto reemplaza la imagen del plato — elige un archivo de imagen y pulsa el botón junto al selector.",
+          "Subir foto reemplaza la imagen del plato y la guarda en Supabase Storage (en local, si no hay claves de Supabase, queda en disco). Elige un archivo JPG, PNG, WebP o GIF y pulsa el botón junto al selector.",
         ],
       },
       {

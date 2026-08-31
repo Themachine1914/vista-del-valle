@@ -4,10 +4,17 @@ App web del restaurante **Vista del Valle** (Casabito, República Dominicana): c
 
 ## Arranque local
 
+1. Crea un proyecto en [supabase.com](https://supabase.com) (región cercana).
+2. Copia `.env.example` a `.env` y pega las claves:
+   - **DATABASE_URL** — Connect → *Transaction pooler* (puerto `6543`), con `?pgbouncer=true`
+   - **DIRECT_URL** — Connect → *Session pooler* o conexión directa (puerto `5432`)
+   - **NEXT_PUBLIC_SUPABASE_URL**, **NEXT_PUBLIC_SUPABASE_ANON_KEY**, **SUPABASE_SERVICE_ROLE_KEY** — Settings → API
+3. Genera `AUTH_SECRET` con `openssl rand -base64 32`.
+4. Instala, empuja el esquema y carga el seed:
+
 ```bash
 npm install
-npx prisma db push
-npx tsx prisma/seed.ts
+npm run db:setup
 npm run dev
 ```
 
@@ -36,12 +43,30 @@ Pendiente con el restaurante: precios de bebidas y guarniciones, recetas de cóc
 
 ## Fotos
 
-Instagram (`@vistadelvallecasabito`) exige login para bajar el perfil. La carta usa ilustraciones de categoría; en **Admin → Platos** se sube la foto real de cada plato. Si más adelante exportas el perfil de Instagram, copia los JPG a `public/images/platos/{id-del-plato}.jpg` y vuelve a correr el seed.
+Instagram (`@vistadelvallecasabito`) exige login para bajar el perfil. La carta usa ilustraciones de categoría; en **Admin → Platos** se sube la foto real de cada plato a **Supabase Storage**. Si más adelante exportas el perfil de Instagram, copia los JPG a `public/images/platos/{id-del-plato}.jpg` y vuelve a correr el seed.
 
-## Base de datos
+## Base de datos (Supabase)
 
-Por defecto usa **SQLite** (`prisma/dev.db`) para poder trabajar sin Docker. El `docker-compose.yml` deja PostgreSQL listo: cambia `DATABASE_URL` y el `provider` en `prisma/schema.prisma` a `postgresql` cuando lo tengas.
+Postgres alojado en **Supabase**. Prisma sigue siendo el ORM: el esquema vive en `prisma/schema.prisma`.
+
+| Variable | Uso |
+|---|---|
+| `DATABASE_URL` | Pooler transaccional (6543) para la app en Vercel |
+| `DIRECT_URL` | Conexión de sesión / directa (5432) para `prisma db push` |
+| `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Storage: fotos de platos en el bucket público `platos` |
+
+Tras crear el proyecto, en Vercel configura las mismas variables. Luego:
+
+```bash
+npx prisma db push
+npx tsx prisma/seed.ts
+npm run db:storage
+```
+
+`db:storage` crea el bucket `platos` (también puedes pegar `supabase/storage.sql` en el SQL Editor). Las fotos nuevas se suben ahí; en local, si faltan las claves, se guardan en `public/uploads`.
+
+Postgres local con Docker sigue disponible (`npm run db:up`) si no quieres un proyecto de Supabase para desarrollar.
 
 ## Stack
 
-Next.js 15 · TypeScript · Tailwind · Prisma · Auth.js · Recharts
+Next.js 15 · TypeScript · Tailwind · Prisma · Supabase (Postgres + Storage) · Auth.js · Recharts

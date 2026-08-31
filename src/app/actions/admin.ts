@@ -1,10 +1,9 @@
 "use server";
 
 import { auth } from "@/auth";
+import { storeDishPhoto } from "@/lib/dish-photo";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, extname } from "node:path";
 import { z } from "zod";
 
 async function requireAdmin() {
@@ -47,14 +46,15 @@ export async function uploadDishPhotoAction(formData: FormData) {
   if (!id || !(file instanceof File) || file.size === 0) {
     throw new Error("Selecciona una imagen");
   }
-  const ext = extname(file.name).toLowerCase() || ".jpg";
-  const dir = join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  const filename = `${id}-${Date.now()}${ext}`;
-  await writeFile(join(dir, filename), Buffer.from(await file.arrayBuffer()));
+  const dish = await prisma.dish.findUnique({
+    where: { id },
+    select: { foto: true },
+  });
+  if (!dish) throw new Error("Plato no encontrado");
+  const foto = await storeDishPhoto(id, file, dish.foto);
   await prisma.dish.update({
     where: { id },
-    data: { foto: `/uploads/${filename}` },
+    data: { foto },
   });
   revalidatePath("/admin");
   revalidatePath("/");
