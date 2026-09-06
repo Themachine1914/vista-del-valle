@@ -7,6 +7,7 @@ import {
   dishes,
   historicalUnits,
   ingredients,
+  prepRecipes,
   recipes,
 } from "./catalog";
 
@@ -81,6 +82,9 @@ async function main() {
   await prisma.saleItem.deleteMany();
   await prisma.sale.deleteMany();
   await prisma.inventoryMovement.deleteMany();
+  await prisma.prepBatch.deleteMany();
+  await prisma.prepRecipeIngredient.deleteMany();
+  await prisma.prepRecipe.deleteMany();
   await prisma.recipeIngredient.deleteMany();
   await prisma.recipe.deleteMany();
   await prisma.dish.deleteMany();
@@ -172,6 +176,37 @@ async function main() {
     });
   }
 
+  for (const prep of prepRecipes) {
+    if (!ingredientIds.has(prep.outputIngredientId)) {
+      throw new Error(`Preparación sin producto: ${prep.outputIngredientId}`);
+    }
+    const missing = prep.items.filter(([id]) => !ingredientIds.has(id));
+    if (missing.length) {
+      throw new Error(
+        `Ingrediente faltante en ${prep.id}: ${missing.map((m) => m[0]).join(", ")}`,
+      );
+    }
+    if (prep.items.some(([id]) => id === prep.outputIngredientId)) {
+      throw new Error(`La preparación ${prep.id} se consume a sí misma`);
+    }
+    await prisma.prepRecipe.create({
+      data: {
+        id: prep.id,
+        nombre: prep.nombre,
+        outputIngredientId: prep.outputIngredientId,
+        rendimiento: prep.rendimiento,
+        tiempoPreparacion: prep.minutos,
+        pasos: prep.pasos,
+        ingredients: {
+          create: prep.items.map(([ingredientId, cantidad]) => ({
+            ingredientId,
+            cantidad,
+          })),
+        },
+      },
+    });
+  }
+
   const days = eachDay(
     new Date(Date.UTC(2026, 5, 1)),
     new Date(Date.UTC(2026, 6, 31)),
@@ -236,7 +271,7 @@ async function main() {
   }
 
   console.log(
-    `Seed OK: ${dishes.length} platos, ${ingredients.length} ingredientes, ${recipes.length} recetas, ${saleKeys.size} ventas, ${items.length} líneas.`,
+    `Seed OK: ${dishes.length} platos, ${ingredients.length} ingredientes, ${recipes.length} recetas, ${prepRecipes.length} preparaciones, ${saleKeys.size} ventas, ${items.length} líneas.`,
   );
 }
 

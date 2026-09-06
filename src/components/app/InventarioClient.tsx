@@ -65,7 +65,7 @@ type AuditRow = {
 type MovimientoRow = {
   id: string;
   fecha: string;
-  tipo: "ENTRADA" | "VENTA" | "AJUSTE";
+  tipo: "ENTRADA" | "VENTA" | "AJUSTE" | "PREPARACION";
   producto: string;
   etiqueta: string;
   precio: string;
@@ -77,6 +77,7 @@ const TIPO_MOV: Record<MovimientoRow["tipo"], string> = {
   ENTRADA: "Compra",
   VENTA: "Consumo",
   AJUSTE: "Ajuste",
+  PREPARACION: "Preparación",
 };
 
 type CompraRow = {
@@ -415,7 +416,7 @@ export function InventarioClient({
   async function borrar(id: string, nombre: string) {
     if (
       !window.confirm(
-        `¿Borrar "${nombre}" por completo? Se quita de recetas. El registro de alta/baja se conserva.`,
+        `¿Borrar "${nombre}" por completo? Se quita de recetas y preparaciones. El registro de alta/baja se conserva.`,
       )
     ) {
       return;
@@ -1050,9 +1051,7 @@ export function InventarioClient({
               <tr key={m.id} className="border-t border-fa-border">
                 <td className="px-3 py-2 text-fa-muted">{m.fecha}</td>
                 <td className="px-3 py-2">
-                  {m.tipo === "VENTA" && m.nota?.startsWith("Anulación")
-                    ? "Anulación"
-                    : TIPO_MOV[m.tipo]}
+                  {m.nota?.startsWith("Anulación") ? "Anulación" : TIPO_MOV[m.tipo]}
                 </td>
                 <td className="px-3 py-2">
                   <span className="font-medium">{m.producto}</span>

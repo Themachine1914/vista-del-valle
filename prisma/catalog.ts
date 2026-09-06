@@ -430,7 +430,17 @@ export const ingredients: { id: string; nombre: string; unidad: Unidad; minimo: 
   { id: "maiz", nombre: "Maíz / coco rallado (majarete)", unidad: "G", minimo: 500 },
   { id: "agua-ud", nombre: "Agua (botella)", unidad: "UD", minimo: 48 },
   { id: "presidente-ud", nombre: "Presidente normal (botella)", unidad: "UD", minimo: 24 },
+  { id: "salsa-alfredo-blanca", nombre: "Salsa Alfredo Blanca", unidad: "ML", minimo: 3785 },
+  { id: "salsa-del-bosque", nombre: "Salsa del Bosque", unidad: "ML", minimo: 1000 },
+  { id: "salsa-de-tamarindo", nombre: "Salsa de Tamarindo", unidad: "ML", minimo: 3785 },
+  { id: "salsa-del-rey", nombre: "Salsa del Rey", unidad: "ML", minimo: 1000 },
+  { id: "salsa-blue-cheese", nombre: "Salsa Blue Cheese", unidad: "ML", minimo: 1000 },
 ];
+
+/** 1 galón US en ml — unidad de lote de las salsas base. */
+export const GAL_ML = 3785.41;
+const LB_G = 453.592;
+const OZ_G = LB_G / 16;
 
 export type RecipeSeed = {
   dishId: string;
@@ -438,6 +448,51 @@ export type RecipeSeed = {
   pasos: string[];
   items: [string, number][];
 };
+
+export type PrepRecipeSeed = {
+  id: string;
+  nombre: string;
+  outputIngredientId: string;
+  rendimiento: number;
+  minutos?: number;
+  pasos: string[];
+  items: [string, number][];
+};
+
+/** Recetas internas de lote. Solo cantidades del recetario que se pueden convertir a stock. */
+export const prepRecipes: PrepRecipeSeed[] = [
+  {
+    id: "prep-salsa-alfredo-blanca",
+    nombre: "Salsa Alfredo Blanca",
+    outputIngredientId: "salsa-alfredo-blanca",
+    rendimiento: 2 * GAL_ML,
+    minutos: 40,
+    pasos: [
+      "Calentar leche y crema",
+      "Integrar mantequilla",
+      "Ligar con harina",
+      "Reservar el lote",
+    ],
+    items: [
+      ["leche", 2000],
+      ["crema-leche", 2000],
+      ["mantequilla", Math.round(0.5 * LB_G)],
+      ["harina", Math.round(4 * OZ_G)],
+    ],
+  },
+  {
+    id: "prep-salsa-de-tamarindo",
+    nombre: "Salsa de Tamarindo",
+    outputIngredientId: "salsa-de-tamarindo",
+    rendimiento: GAL_ML,
+    minutos: 35,
+    pasos: ["Cocer tamarindo", "Integrar mostaza y ajo", "Ligar con harina", "Reservar el lote"],
+    items: [
+      ["tamarindo", Math.round(LB_G)],
+      ["harina", Math.round(4 * OZ_G)],
+    ],
+  },
+];
 
 export const recipes: RecipeSeed[] = [
   { dishId: "aros-calamar", minutos: 15, pasos: ["Sazonar anillas", "Empanar (harina-huevo-pan)", "Freír 3 min", "Servir con limón"], items: [["calamar", 200], ["harina", 50], ["huevo", 1], ["pan-rallado", 50], ["aceite-freir", 100], ["sal", 2], ["limon", 0.25]] },

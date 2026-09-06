@@ -197,7 +197,7 @@ export async function voidSaleItem(input: { saleItemId: string; userId: string }
 
 export async function adjustStock(input: {
   ingredientId: string;
-  tipo: Exclude<MovementType, "VENTA">;
+  tipo: Exclude<MovementType, "VENTA" | "PREPARACION">;
   cantidad: number;
   nota?: string;
   userId: string;

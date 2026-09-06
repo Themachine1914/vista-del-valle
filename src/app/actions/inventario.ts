@@ -36,14 +36,37 @@ async function convertRecipeQuantities(
 ) {
   const to = resolveEntrada(tipoNuevo, customNuevo);
   if (fromUnidad === to.unidadMedida) return;
+  const convert = (cantidad: Prisma.Decimal | number) =>
+    displayToStock(
+      stockToDisplay(Number(cantidad), fromUnidad, fromEtiqueta),
+      tipoNuevo,
+      customNuevo,
+    );
   const lines = await tx.recipeIngredient.findMany({ where: { ingredientId } });
   for (const line of lines) {
-    const display = stockToDisplay(Number(line.cantidad), fromUnidad, fromEtiqueta);
     await tx.recipeIngredient.update({
       where: {
         recipeId_ingredientId: { recipeId: line.recipeId, ingredientId },
       },
-      data: { cantidad: displayToStock(display, tipoNuevo, customNuevo) },
+      data: { cantidad: convert(line.cantidad) },
+    });
+  }
+  const prepLines = await tx.prepRecipeIngredient.findMany({ where: { ingredientId } });
+  for (const line of prepLines) {
+    await tx.prepRecipeIngredient.update({
+      where: {
+        recipeId_ingredientId: { recipeId: line.recipeId, ingredientId },
+      },
+      data: { cantidad: convert(line.cantidad) },
+    });
+  }
+  const outputs = await tx.prepRecipe.findMany({
+    where: { outputIngredientId: ingredientId },
+  });
+  for (const prep of outputs) {
+    await tx.prepRecipe.update({
+      where: { id: prep.id },
+      data: { rendimiento: convert(prep.rendimiento) },
     });
   }
 }

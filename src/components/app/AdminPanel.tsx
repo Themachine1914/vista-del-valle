@@ -5,13 +5,15 @@ import {
   createDishAction,
   createIngredientAction,
   deleteIngredientAction,
+  deletePrepRecipeAction,
+  savePrepRecipeAction,
   saveRecipeAction,
   updateDishAction,
   updateIngredientAction,
   uploadDishPhotoAction,
 } from "@/app/actions/admin";
 import { borrarVentaAction } from "@/app/actions/ventas";
-import { formatRD } from "@/lib/money";
+import { formatQty, formatRD } from "@/lib/money";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -48,6 +50,15 @@ type Rec = {
   pasos: string[];
   items: { ingredientId: string; cantidad: number }[];
 };
+type Prep = {
+  id: string;
+  nombre: string;
+  outputIngredientId: string;
+  rendimiento: number;
+  tiempoPreparacion: number | null;
+  pasos: string[];
+  items: { ingredientId: string; cantidad: number }[];
+};
 type VentaAdmin = {
   id: string;
   fecha: string;
@@ -64,6 +75,7 @@ export function AdminPanel({
   dishes,
   ingredients,
   recipes,
+  prepRecipes,
   ventas,
   ventasFecha,
   initialTab,
@@ -72,13 +84,19 @@ export function AdminPanel({
   dishes: Dish[];
   ingredients: Ing[];
   recipes: Rec[];
+  prepRecipes: Prep[];
   ventas: VentaAdmin[];
   ventasFecha: string;
   initialTab: "platos" | "ventas";
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<
-    "platos" | "ingredientes" | "categorias" | "recetas" | "ventas"
+    | "platos"
+    | "ingredientes"
+    | "categorias"
+    | "recetas"
+    | "preparaciones"
+    | "ventas"
   >(initialTab);
 
   return (
@@ -91,6 +109,7 @@ export function AdminPanel({
             ["ingredientes", "Ingredientes"],
             ["categorias", "Categorías"],
             ["recetas", "Recetas"],
+            ["preparaciones", "Preparaciones"],
             ["ventas", "Ventas"],
           ] as const
         ).map(([id, label]) => (
@@ -119,6 +138,9 @@ export function AdminPanel({
         {tab === "categorias" ? <Categorias /> : null}
         {tab === "recetas" ? (
           <Recetas dishes={dishes} ingredients={ingredients} recipes={recipes} />
+        ) : null}
+        {tab === "preparaciones" ? (
+          <Preparaciones ingredients={ingredients} recipes={prepRecipes} />
         ) : null}
         {tab === "ventas" ? (
           <VentasAdmin ventas={ventas} ventasFecha={ventasFecha} />
@@ -430,7 +452,7 @@ function Ingredientes({ ingredients }: { ingredients: Ing[] }) {
                     onSubmit={(e) => {
                       if (
                         !window.confirm(
-                          `¿Borrar "${i.nombre}"? Esto también elimina sus líneas de receta y su historial de movimientos.`,
+                          `¿Borrar "${i.nombre}"? Esto también elimina sus líneas de receta o preparación y su historial de movimientos.`,
                         )
                       ) {
                         e.preventDefault();
@@ -609,6 +631,255 @@ function Recetas({
       >
         Guardar receta
       </button>
+      {msg ? <p className="text-sm text-fa-muted">{msg}</p> : null}
+    </div>
+  );
+}
+
+function Preparaciones({
+  ingredients,
+  recipes,
+}: {
+  ingredients: Ing[];
+  recipes: Prep[];
+}) {
+  const [recipeId, setRecipeId] = useState(recipes[0]?.id ?? "");
+  const current = recipes.find((r) => r.id === recipeId);
+  const usedOutputs = new Set(
+    recipes.filter((r) => r.id !== recipeId).map((r) => r.outputIngredientId),
+  );
+  const outputOptions = ingredients.filter((i) => !usedOutputs.has(i.id));
+  const [nombre, setNombre] = useState(current?.nombre ?? "");
+  const [outputId, setOutputId] = useState(
+    current?.outputIngredientId ?? outputOptions[0]?.id ?? "",
+  );
+  const [rendimiento, setRendimiento] = useState(current?.rendimiento ?? 3785);
+  const [pasos, setPasos] = useState(current?.pasos.join("\n") ?? "");
+  const [items, setItems] = useState(
+    current?.items ?? [{ ingredientId: ingredients[0]?.id ?? "", cantidad: 1 }],
+  );
+  const [minutos, setMinutos] = useState(current?.tiempoPreparacion ?? 0);
+  const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
+  const output = ingredients.find((i) => i.id === outputId);
+
+  function load(id: string) {
+    setRecipeId(id);
+    const r = recipes.find((x) => x.id === id);
+    setNombre(r?.nombre ?? "");
+    setOutputId(r?.outputIngredientId ?? outputOptions[0]?.id ?? "");
+    setRendimiento(r?.rendimiento ?? 3785);
+    setPasos(r?.pasos.join("\n") ?? "");
+    setItems(r?.items ?? [{ ingredientId: ingredients[0]?.id ?? "", cantidad: 1 }]);
+    setMinutos(r?.tiempoPreparacion ?? 0);
+    setMsg(null);
+  }
+
+  function nueva() {
+    const libre = ingredients.find((i) => !recipes.some((r) => r.outputIngredientId === i.id));
+    setRecipeId("");
+    setNombre("");
+    setOutputId(libre?.id ?? ingredients[0]?.id ?? "");
+    setRendimiento(3785);
+    setPasos("");
+    setItems([{ ingredientId: ingredients[0]?.id ?? "", cantidad: 1 }]);
+    setMinutos(0);
+    setMsg(null);
+  }
+
+  async function save() {
+    const res = await savePrepRecipeAction({
+      id: recipeId || undefined,
+      nombre: nombre.trim() || output?.nombre || "Preparación",
+      outputIngredientId: outputId,
+      rendimiento,
+      tiempoPreparacion: minutos || null,
+      pasos: pasos
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      items,
+    });
+    setMsg(res.ok ? "Preparación guardada" : res.error);
+    if (res.ok) router.refresh();
+  }
+
+  async function borrar() {
+    if (!recipeId) return;
+    if (!window.confirm(`¿Borrar la preparación "${nombre}"?`)) return;
+    const res = await deletePrepRecipeAction(recipeId);
+    setMsg(res.ok ? "Preparación borrada" : res.error);
+    if (res.ok) {
+      setRecipeId("");
+      router.refresh();
+    }
+  }
+
+  return (
+    <div className="space-y-4 rounded-[10px] border border-fa-border bg-fa-surface p-4">
+      <p className="text-sm text-fa-muted">
+        Receta de lote interno: al prepararla se descuentan estos ingredientes y entra el
+        producto terminado (la salsa) al inventario. Primero crea el producto en
+        Ingredientes si aún no existe.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <select
+          value={recipeId}
+          onChange={(e) => load(e.target.value)}
+          className="min-w-56 flex-1 rounded-[10px] border border-fa-border px-3 py-2 text-sm"
+        >
+          {recipes.length === 0 ? (
+            <option value="">Nueva preparación</option>
+          ) : null}
+          {recipes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.nombre}
+            </option>
+          ))}
+        </select>
+        <button type="button" onClick={nueva} className="text-sm text-fa-accent">
+          + Nueva
+        </button>
+      </div>
+      <label className="block text-sm">
+        Nombre
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          className="mt-1 w-full rounded-md border border-fa-border px-2 py-1"
+        />
+      </label>
+      <label className="block text-sm">
+        Producto que produce
+        <select
+          value={outputId}
+          onChange={(e) => {
+            setOutputId(e.target.value);
+            const ing = ingredients.find((i) => i.id === e.target.value);
+            if (ing && !nombre.trim()) setNombre(ing.nombre);
+          }}
+          className="mt-1 w-full rounded-md border border-fa-border px-2 py-1 text-sm"
+        >
+          {outputOptions.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.nombre}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm">
+        Rendimiento de 1 lote
+        {output ? (
+          <span className="text-fa-muted">
+            {" "}
+            ({output.unidadMedida === "ML" ? "ml" : output.unidadMedida === "G" ? "g" : "ud"})
+          </span>
+        ) : null}
+        <input
+          type="number"
+          step="0.01"
+          min={0.01}
+          value={rendimiento}
+          onChange={(e) => setRendimiento(Number(e.target.value))}
+          className="mt-1 w-40 rounded-md border border-fa-border px-2 py-1"
+        />
+        {output ? (
+          <span className="ml-2 text-xs text-fa-muted">
+            {formatQty(rendimiento, output.unidadMedida)}
+          </span>
+        ) : null}
+      </label>
+      <label className="block text-sm">
+        Minutos
+        <input
+          type="number"
+          value={minutos}
+          onChange={(e) => setMinutos(Number(e.target.value))}
+          className="mt-1 w-32 rounded-md border border-fa-border px-2 py-1"
+        />
+      </label>
+      <label className="block text-sm">
+        Pasos (uno por línea)
+        <textarea
+          value={pasos}
+          onChange={(e) => setPasos(e.target.value)}
+          rows={5}
+          className="mt-1 w-full rounded-md border border-fa-border px-2 py-1"
+        />
+      </label>
+      <div className="space-y-2">
+        {items.map((it, idx) => (
+          <div key={idx} className="flex gap-2">
+            <select
+              value={it.ingredientId}
+              onChange={(e) =>
+                setItems((p) =>
+                  p.map((x, i) =>
+                    i === idx ? { ...x, ingredientId: e.target.value } : x,
+                  ),
+                )
+              }
+              className="flex-1 rounded-md border border-fa-border px-2 py-1 text-sm"
+            >
+              {ingredients.map((ing) => (
+                <option key={ing.id} value={ing.id}>
+                  {ing.nombre}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              step="0.01"
+              value={it.cantidad}
+              onChange={(e) =>
+                setItems((p) =>
+                  p.map((x, i) =>
+                    i === idx ? { ...x, cantidad: Number(e.target.value) } : x,
+                  ),
+                )
+              }
+              className="w-24 rounded-md border border-fa-border px-2 py-1 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setItems((p) => p.filter((_, i) => i !== idx))}
+              className="text-sm text-red-700"
+            >
+              Quitar
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() =>
+            setItems((p) => [
+              ...p,
+              { ingredientId: ingredients[0]?.id ?? "", cantidad: 1 },
+            ])
+          }
+          className="text-sm text-fa-accent"
+        >
+          + Ingrediente
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void save()}
+          className="rounded-[10px] bg-fa-primary px-4 py-2 text-sm text-white"
+        >
+          Guardar preparación
+        </button>
+        {recipeId ? (
+          <button
+            type="button"
+            onClick={() => void borrar()}
+            className="rounded-[10px] border border-fa-border px-4 py-2 text-sm text-red-700"
+          >
+            Borrar
+          </button>
+        ) : null}
+      </div>
       {msg ? <p className="text-sm text-fa-muted">{msg}</p> : null}
     </div>
   );

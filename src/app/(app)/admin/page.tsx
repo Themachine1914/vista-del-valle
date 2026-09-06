@@ -26,7 +26,7 @@ export default async function AdminPage({
   const day = new Date(Date.UTC(y, m - 1, d));
   const nextDay = new Date(Date.UTC(y, m - 1, d + 1));
 
-  const [categories, dishes, ingredients, recipes, saleItems] = await Promise.all([
+  const [categories, dishes, ingredients, recipes, prepRecipes, saleItems] = await Promise.all([
     prisma.category.findMany({ orderBy: { orden: "asc" } }),
     prisma.dish.findMany({
       include: { category: true },
@@ -35,6 +35,10 @@ export default async function AdminPage({
     prisma.ingredient.findMany({ orderBy: { nombre: "asc" } }),
     prisma.recipe.findMany({
       include: { dish: true, ingredients: true },
+    }),
+    prisma.prepRecipe.findMany({
+      include: { ingredients: true },
+      orderBy: { nombre: "asc" },
     }),
     prisma.saleItem.findMany({
       where: { sale: { fecha: { gte: day, lt: nextDay } } },
@@ -79,6 +83,18 @@ export default async function AdminPage({
       recipes={recipes.map((r) => ({
         dishId: r.dishId,
         dishNombre: r.dish.nombre,
+        tiempoPreparacion: r.tiempoPreparacion,
+        pasos: Array.isArray(r.pasos) ? (r.pasos as string[]) : [],
+        items: r.ingredients.map((x) => ({
+          ingredientId: x.ingredientId,
+          cantidad: toMoney(x.cantidad),
+        })),
+      }))}
+      prepRecipes={prepRecipes.map((r) => ({
+        id: r.id,
+        nombre: r.nombre,
+        outputIngredientId: r.outputIngredientId,
+        rendimiento: toMoney(r.rendimiento),
         tiempoPreparacion: r.tiempoPreparacion,
         pasos: Array.isArray(r.pasos) ? (r.pasos as string[]) : [],
         items: r.ingredients.map((x) => ({
