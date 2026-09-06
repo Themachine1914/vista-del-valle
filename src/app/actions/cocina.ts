@@ -29,7 +29,7 @@ export async function registrarLoteAction(raw: unknown) {
   const session = await requireKitchen();
   if (!session) return { ok: false as const, error: "No autorizado" };
   const parsed = registrarSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false as const, error: "Datos inv·lidos" };
+  if (!parsed.success) return { ok: false as const, error: "Datos inv√°lidos" };
   try {
     const result = await registerPrepBatch({
       recipeId: parsed.data.recipeId,

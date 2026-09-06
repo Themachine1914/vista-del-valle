@@ -8,7 +8,7 @@ export type PrepGraphNode = {
   inputIngredientIds: string[];
 };
 
-/** True if this preparaciÛn would consume its own output, directly or through other preps. */
+/** True if this preparaci√≥n would consume its own output, directly or through other preps. */
 export function wouldCreateCycle(
   outputIngredientId: string,
   inputIngredientIds: string[],
@@ -67,9 +67,9 @@ export async function registerPrepBatch(input: {
       where: { id: input.recipeId },
       include: { ingredients: true },
     });
-    if (!recipe) throw new Error("PreparaciÛn no encontrada");
+    if (!recipe) throw new Error("Preparaci√≥n no encontrada");
     if (recipe.ingredients.length === 0) {
-      throw new Error("Esta preparaciÛn no tiene ingredientes cargados");
+      throw new Error("Esta preparaci√≥n no tiene ingredientes cargados");
     }
 
     const fecha = input.fecha ?? new Date();
@@ -81,7 +81,7 @@ export async function registerPrepBatch(input: {
         userId: input.userId,
       },
     });
-    const nota = `PreparaciÛn: ${recipe.nombre} (${etiquetaLotes(input.lotes)})`;
+    const nota = `Preparaci√≥n: ${recipe.nombre} (${etiquetaLotes(input.lotes)})`;
 
     for (const line of recipe.ingredients) {
       const qty = computePrepQty(line.cantidad, input.lotes);
@@ -118,14 +118,14 @@ export async function voidPrepBatch(input: { batchId: string; userId: string }) 
         movements: true,
       },
     });
-    if (!batch) throw new Error("Ese lote ya no est·");
+    if (!batch) throw new Error("Ese lote ya no est√°");
     if (batch.anulado) throw new Error("Ese lote ya fue anulado");
 
     const originals = batch.movements.filter(
-      (m) => !m.nota?.startsWith("AnulaciÛn"),
+      (m) => !m.nota?.startsWith("Anulaci√≥n"),
     );
     const fecha = batch.fecha;
-    const nota = `AnulaciÛn: ${batch.recipe.nombre} (${etiquetaLotes(Number(batch.lotes))})`;
+    const nota = `Anulaci√≥n: ${batch.recipe.nombre} (${etiquetaLotes(Number(batch.lotes))})`;
 
     for (const m of originals) {
       const reverse = new Prisma.Decimal(m.cantidad).negated();
