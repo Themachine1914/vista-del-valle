@@ -92,7 +92,7 @@ const SECTIONS: Section[] = [
         titulo: "Consultar historial",
         puntos: [
           "Consumo: lo que las ventas fueron descontando en el período elegido.",
-          "Movimientos: todo junto — Compra, Consumo, Ajuste, y “Anulación” cuando se borra una venta y el inventario se repone.",
+          "Movimientos: todo junto — Compra, Consumo, Ajuste, Preparación (cuando cocina registra un lote de salsa), y “Anulación” cuando se borra una venta o un lote.",
           "Registro de altas, bajas y cambios y Compras registradas (con la comparación de precio contra la compra anterior) están más abajo, uno al lado del otro.",
           "Imprimir registro PDF descarga el reporte completo del período elegido.",
         ],
@@ -114,13 +114,23 @@ const SECTIONS: Section[] = [
     ruta: "/cocina",
     roles: ["ADMIN", "COCINA"],
     resumen:
-      "Consulta la receta de cada plato y escala los ingredientes según cuántas porciones necesitas preparar.",
+      "Consulta recetas de plato, escala porciones y registra lotes de salsas y otras preparaciones internas.",
     bloques: [
       {
+        titulo: "Recetas de plato",
         puntos: [
-          "La lista muestra todos los platos que ya tienen receta cargada; toca uno para abrir su ficha.",
+          "La lista de abajo muestra todos los platos que ya tienen receta cargada; toca uno para abrir su ficha.",
           "Dentro de la ficha, cambia el número en “Porciones” y la cantidad de cada ingrediente se recalcula automáticamente en proporción a la receta base.",
           "Debajo aparecen los pasos de preparación numerados en el orden en que se cargaron.",
+        ],
+      },
+      {
+        titulo: "Preparaciones internas (salsas de lote)",
+        puntos: [
+          "Arriba están las salsas y bases que se preparan por galón u otro lote. No se venden: al registrar un lote salen los crudos y entra la salsa al inventario.",
+          "En la ficha, indica cuántos lotes vas a hacer. El preview muestra qué baja (leche, crema, harina…) y cuánta salsa entra.",
+          "Pulsa Registrar lote cuando el lote esté listo. Si te equivocaste, Anular en “Lotes recientes” devuelve los crudos y quita la salsa entrada.",
+          "Cuando Ventas registra un plato que usa esa salsa, solo se descuenta la salsa — los crudos ya salieron al preparar el lote.",
         ],
       },
     ],
@@ -150,7 +160,7 @@ const SECTIONS: Section[] = [
     ruta: "/admin",
     roles: ["ADMIN"],
     resumen:
-      "Panel para dar de alta o modificar todo lo que las demás pantallas usan: platos, ingredientes, categorías, recetas, y corregir ventas de cualquier día.",
+      "Panel para dar de alta o modificar todo lo que las demás pantallas usan: platos, ingredientes, categorías, recetas, preparaciones internas, y corregir ventas de cualquier día.",
     bloques: [
       {
         titulo: "Pestaña Platos",
@@ -181,6 +191,15 @@ const SECTIONS: Section[] = [
           "Elige el plato, escribe los minutos de preparación, los pasos (uno por línea) y la lista de ingredientes con la cantidad que usa la receta.",
           "Esta es la receta que Ventas usa para descontar inventario automáticamente y que Cocina usa para escalar porciones — mantenerla exacta es lo que hace confiable el resto del sistema.",
           "Pulsa Guardar receta para aplicar los cambios.",
+        ],
+      },
+      {
+        titulo: "Pestaña Preparaciones",
+        puntos: [
+          "Una preparación interna produce un producto de inventario (por ejemplo Salsa Alfredo Blanca). Primero crea ese producto en Ingredientes si no existe.",
+          "Indica el rendimiento de 1 lote (en la unidad del producto: ml, g o ud) y los ingredientes crudos que consume ese lote.",
+          "Una salsa puede usar otra salsa ya preparada (Salsa del Rey encima de Alfredo). El sistema no deja guardar un ciclo.",
+          "Cocina registra cada lote desde su pantalla; aquí solo se define la receta.",
         ],
       },
       {

@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { wouldCreateCycle } from "@/lib/prep-recipe";
 import { revalidatePath } from "next/cache";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, extname } from "node:path";
@@ -102,9 +103,20 @@ export async function deleteIngredientAction(formData: FormData) {
   const session = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Falta el ingrediente");
-  const ing = await prisma.ingredient.findUnique({ where: { id } });
+  const ing = await prisma.ingredient.findUnique({
+    where: { id },
+    include: { prepOutputOf: { include: { _count: { select: { batches: true } } } } },
+  });
   if (!ing) throw new Error("Ingrediente no encontrado");
+  if (ing.prepOutputOf && ing.prepOutputOf._count.batches > 0) {
+    throw new Error(
+      `No se puede borrar "${ing.nombre}": hay lotes registrados de su preparación`,
+    );
+  }
   await prisma.$transaction(async (tx) => {
+    if (ing.prepOutputOf) {
+      await tx.prepRecipe.delete({ where: { id: ing.prepOutputOf.id } });
+    }
     await tx.inventoryAudit.create({
       data: {
         accion: "BAJA",
@@ -158,6 +170,103 @@ export async function saveRecipeAction(raw: unknown) {
       });
     }
   });
+  revalidatePath("/cocina");
+  revalidatePath("/admin");
+  return { ok: true as const };
+}
+
+const prepRecipeSchema = z.object({
+  id: z.string().min(1).optional(),
+  nombre: z.string().min(1).max(80),
+  outputIngredientId: z.string().min(1),
+  rendimiento: z.coerce.number().positive(),
+  tiempoPreparacion: z.coerce.number().int().min(0).nullable(),
+  pasos: z.array(z.string().min(1)),
+  items: z
+    .array(
+      z.object({
+        ingredientId: z.string().min(1),
+        cantidad: z.coerce.number().positive(),
+      }),
+    )
+    .min(1),
+});
+
+export async function savePrepRecipeAction(raw: unknown) {
+  await requireAdmin();
+  const parsed = prepRecipeSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false as const, error: "Datos inválidos" };
+  const { id, nombre, outputIngredientId, rendimiento, tiempoPreparacion, pasos, items } =
+    parsed.data;
+
+  const uniqueInputs = new Set(items.map((i) => i.ingredientId));
+  if (uniqueInputs.size !== items.length) {
+    return { ok: false as const, error: "Hay un ingrediente repetido" };
+  }
+  if (uniqueInputs.has(outputIngredientId)) {
+    return { ok: false as const, error: "La salsa no puede usarse como ingrediente de sí misma" };
+  }
+
+  const others = await prisma.prepRecipe.findMany({
+    where: id ? { id: { not: id } } : undefined,
+    include: { ingredients: true },
+  });
+  if (
+    wouldCreateCycle(
+      outputIngredientId,
+      items.map((i) => i.ingredientId),
+      others.map((p) => ({
+        outputIngredientId: p.outputIngredientId,
+        inputIngredientIds: p.ingredients.map((i) => i.ingredientId),
+      })),
+    )
+  ) {
+    return {
+      ok: false as const,
+      error: "Esa preparación formaría un ciclo (una salsa no puede depender de sí misma)",
+    };
+  }
+
+  const taken = await prisma.prepRecipe.findUnique({
+    where: { outputIngredientId },
+  });
+  if (taken && taken.id !== id) {
+    return { ok: false as const, error: "Ese producto ya tiene una preparación" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const recipe = id
+      ? await tx.prepRecipe.update({
+          where: { id },
+          data: { nombre, outputIngredientId, rendimiento, tiempoPreparacion, pasos },
+        })
+      : await tx.prepRecipe.create({
+          data: { nombre, outputIngredientId, rendimiento, tiempoPreparacion, pasos },
+        });
+    await tx.prepRecipeIngredient.deleteMany({ where: { recipeId: recipe.id } });
+    await tx.prepRecipeIngredient.createMany({
+      data: items.map((i) => ({
+        recipeId: recipe.id,
+        ingredientId: i.ingredientId,
+        cantidad: i.cantidad,
+      })),
+    });
+  });
+  revalidatePath("/cocina");
+  revalidatePath("/admin");
+  return { ok: true as const };
+}
+
+export async function deletePrepRecipeAction(id: string) {
+  await requireAdmin();
+  const batches = await prisma.prepBatch.count({ where: { recipeId: id } });
+  if (batches > 0) {
+    return {
+      ok: false as const,
+      error: "Hay lotes registrados; no se puede borrar esta preparación",
+    };
+  }
+  await prisma.prepRecipe.delete({ where: { id } });
   revalidatePath("/cocina");
   revalidatePath("/admin");
   return { ok: true as const };

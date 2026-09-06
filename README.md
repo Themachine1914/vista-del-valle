@@ -25,8 +25,8 @@ Abre [http://localhost:3000](http://localhost:3000).
 - `/ventas` — Registrar ventas por fecha y turno; descuenta inventario
 - `/inventario` — Stock, alertas en rojo, entrada/ajuste
 - `/dashboard` — Top 10, ventas por categoría y por día
-- `/cocina` — Recetas con escalador de porciones
-- `/admin` — CRUD de platos (con foto), ingredientes, categorías y recetas
+- `/cocina` — Recetas de plato (escalador de porciones) y preparaciones internas (registrar lote de salsa)
+- `/admin` — CRUD de platos (con foto), ingredientes, categorías, recetas y preparaciones
 
 ## Datos
 

@@ -19,3 +19,7 @@ export function canRegisterSales(role: AppRole): boolean {
 export function isAdmin(role: AppRole): boolean {
   return role === "ADMIN";
 }
+
+export function canManagePrep(role: AppRole): boolean {
+  return role === "ADMIN" || role === "COCINA";
+}

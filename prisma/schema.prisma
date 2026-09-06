@@ -34,6 +34,7 @@ enum MovementType {
   ENTRADA
   VENTA
   AJUSTE
+  PREPARACION
 }
 
 enum InventoryAuditAccion {
@@ -54,6 +55,7 @@ model User {
   movements    InventoryMovement[]
   saleItems    SaleItem[]
   audits       InventoryAudit[]
+  prepBatches  PrepBatch[]
 }
 
 model Category {
@@ -92,6 +94,8 @@ model Ingredient {
   stockMinimo      Decimal
   recipeItems      RecipeIngredient[]
   movements        InventoryMovement[]
+  prepOutputOf     PrepRecipe?
+  prepItems        PrepRecipeIngredient[]
 }
 
 model Recipe {
@@ -112,6 +116,41 @@ model RecipeIngredient {
   ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
   @@id([recipeId, ingredientId])
+}
+
+model PrepRecipe {
+  id                 String                 @id @default(cuid())
+  nombre             String
+  outputIngredientId String                 @unique
+  outputIngredient   Ingredient             @relation(fields: [outputIngredientId], references: [id], onDelete: Restrict)
+  rendimiento        Decimal
+  tiempoPreparacion  Int?
+  pasos              Json
+  ingredients        PrepRecipeIngredient[]
+  batches            PrepBatch[]
+}
+
+model PrepRecipeIngredient {
+  recipeId     String
+  ingredientId String
+  cantidad     Decimal
+  recipe       PrepRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, ingredientId])
+}
+
+model PrepBatch {
+  id        String              @id @default(cuid())
+  recipeId  String
+  recipe    PrepRecipe          @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  lotes     Decimal
+  fecha     DateTime
+  userId    String?
+  user      User?               @relation(fields: [userId], references: [id])
+  anulado   Boolean             @default(false)
+  createdAt DateTime            @default(now())
+  movements InventoryMovement[]
 }
 
 model Sale {
@@ -150,6 +189,8 @@ model InventoryMovement {
   fecha        DateTime     @default(now())
   userId       String?
   user         User?        @relation(fields: [userId], references: [id])
+  prepBatchId  String?
+  prepBatch    PrepBatch?   @relation(fields: [prepBatchId], references: [id], onDelete: SetNull)
   createdAt    DateTime     @default(now())
 }
 
